@@ -6,6 +6,27 @@
 
 The idea: give an AI agent a small but real LLM training setup and let it experiment autonomously overnight. It modifies the code, trains for 5 minutes, checks if the result improved, keeps or discards, and repeats. You wake up in the morning to a log of experiments and (hopefully) a better model. The training code here is a simplified single-GPU implementation of [nanochat](https://github.com/karpathy/nanochat). The core idea is that you're not touching any of the Python files like you normally would as a researcher. Instead, you are programming the `program.md` Markdown files that provide context to the AI agents and set up your autonomous research org. The default `program.md` in this repo is intentionally kept as a bare bones baseline, though it's obvious how one would iterate on it over time to find the "research org code" that achieves the fastest research progress, how you'd add more agents to the mix, etc. A bit more context on this project is here in this [tweet](https://x.com/karpathy/status/2029701092347630069) and [this tweet](https://x.com/karpathy/status/2031135152349524125).
 
+## This fork: Othello + replay telemetry
+
+This fork replaces the web-text corpus with **Othello self-play games** (one
+transcript per document, one token per move) and instruments every experiment
+so the whole night can be replayed on a website afterwards:
+
+- `othello/` — bitboard rules engine (perft-verified), self-play data
+  generator, and model-vs-engine evaluation (move legality, strength vs a
+  random player).
+- `telemetry.py` + `run_experiment.py` — per-step training logs, free-running
+  game samples at every 10% of the budget, final evals and checkpoints, and a
+  `night.jsonl` index. Schema in [telemetry-spec.md](telemetry-spec.md).
+- `site/` — a static playback site: scrub through the night at 10–1000×,
+  watch sampled games on animated boards go from illegal chaos to complete
+  legal games, with val_bpb / loss / legality charts and per-experiment diffs.
+  `site/demo_data.py` generates synthetic data for development;
+  `site/build_data.py` bundles a real `telemetry/` directory.
+
+Everything else — the 5-minute budget, val_bpb, the agent loop in
+`program.md` — works exactly as upstream.
+
 ## How it works
 
 The repo is deliberately kept small and only really has three files that matter:

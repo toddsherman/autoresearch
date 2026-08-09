@@ -20,13 +20,26 @@ Once you get confirmation, kick off the experimentation.
 
 ## Experimentation
 
-Each experiment runs on a single GPU. The training script runs for a **fixed time budget of 5 minutes** (wall clock training time, excluding startup/compilation). You launch it simply as: `uv run train.py`.
+Each experiment runs on a single GPU. The training script runs for a **fixed time budget of 5 minutes** (wall clock training time, excluding startup/compilation). You launch it via the telemetry wrapper:
+
+```
+uv run run_experiment.py --desc "short description of the idea" > run.log 2>&1
+```
+
+The wrapper relays all training output, so `run.log` works exactly as before.
+
+**The data is Othello games**: each document is one complete self-play game as
+space-separated moves ("d3 c5 f6 ..."). The tokenizer is fixed at one token
+per move. The model is learning the rules and strategy of Othello from game
+transcripts alone.
 
 **What you CAN do:**
 - Modify `train.py` — this is the only file you edit. Everything is fair game: model architecture, optimizer, hyperparameters, training loop, batch size, model size, etc.
 
 **What you CANNOT do:**
 - Modify `prepare.py`. It is read-only. It contains the fixed evaluation, data loading, tokenizer, and training constants (time budget, sequence length, etc).
+- Modify `telemetry.py`, `run_experiment.py`, or anything in `othello/`. These are read-only instrumentation and rules-engine code.
+- Remove or break the telemetry hooks in `train.py`. The calls to `telemetry.init_run`, `telemetry.log_step`, `telemetry.maybe_sample`, and `telemetry.finalize` must remain in place and functional, and the model must remain callable as `model(idx) -> logits` for a (B, T) tensor of token ids. **A run with broken or missing telemetry is invalid regardless of its val_bpb** — treat it as a crash, fix, and re-run.
 - Install new packages or add dependencies. You can only use what's already in `pyproject.toml`.
 - Modify the evaluation harness. The `evaluate_bpb` function in `prepare.py` is the ground truth metric.
 
@@ -96,12 +109,13 @@ LOOP FOREVER:
 1. Look at the git state: the current branch/commit we're on
 2. Tune `train.py` with an experimental idea by directly hacking the code.
 3. git commit
-4. Run the experiment: `uv run train.py > run.log 2>&1` (redirect everything — do NOT use tee or let output flood your context)
+4. Run the experiment: `uv run run_experiment.py --desc "what this tries" > run.log 2>&1` (redirect everything — do NOT use tee or let output flood your context)
 5. Read out the results: `grep "^val_bpb:\|^peak_vram_mb:" run.log`
 6. If the grep output is empty, the run crashed. Run `tail -n 50 run.log` to read the Python stack trace and attempt a fix. If you can't get things to work after more than a few attempts, give up.
 7. Record the results in the tsv (NOTE: do not commit the results.tsv file, leave it untracked by git)
-8. If val_bpb improved (lower), you "advance" the branch, keeping the git commit
-9. If val_bpb is equal or worse, you git reset back to where you started
+8. If val_bpb improved (lower): `uv run run_experiment.py --record-status keep`, and you "advance" the branch, keeping the git commit
+9. If val_bpb is equal or worse: `uv run run_experiment.py --record-status discard`, and you git reset back to where you started
+10. If the run crashed: `uv run run_experiment.py --record-status crash`
 
 The idea is that you are a completely autonomous researcher trying things out. If they work, keep. If they don't, discard. And you're advancing the branch so that you can iterate. If you feel like you're getting stuck in some way, you can rewind but you should probably do this very very sparingly (if ever).
 

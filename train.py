@@ -24,6 +24,7 @@ repo = "varunneal/flash-attention-3" if cap == (9, 0) else "kernels-community/fl
 fa3 = get_kernel(repo).flash_attn_interface
 
 from prepare import MAX_SEQ_LEN, TIME_BUDGET, Tokenizer, make_dataloader, evaluate_bpb
+import telemetry  # REQUIRED: hooks must stay in place (see program.md)
 
 # ---------------------------------------------------------------------------
 # GPT Model
@@ -513,6 +514,9 @@ x, y, epoch = next(train_loader)  # prefetch first batch
 print(f"Time budget: {TIME_BUDGET}s")
 print(f"Gradient accumulation steps: {grad_accum_steps}")
 
+telemetry.init_run(config=asdict(config), num_params=num_params,
+                   flops_per_token=num_flops_per_token)
+
 # Schedules (all based on progress = training_time / TIME_BUDGET)
 
 def get_lr_multiplier(progress):
@@ -589,6 +593,12 @@ while True:
 
     print(f"\rstep {step:05d} ({pct_done:.1f}%) | loss: {debiased_smooth_loss:.6f} | lrm: {lrm:.2f} | dt: {dt*1000:.0f}ms | tok/sec: {tok_per_sec:,} | mfu: {mfu:.1f}% | epoch: {epoch} | remaining: {remaining:.0f}s    ", end="", flush=True)
 
+    # Telemetry (REQUIRED): per-step log + milestone game sampling.
+    # Runs outside the timed region, so it does not consume training budget.
+    telemetry.log_step(step=step, progress=progress, loss=debiased_smooth_loss,
+                       lrm=lrm, dt=dt, tok_per_sec=tok_per_sec, mfu=mfu, epoch=epoch)
+    telemetry.maybe_sample(model, tokenizer, progress, step)
+
     # GC management (Python's GC causes ~500ms stalls)
     if step == 0:
         gc.collect()
@@ -628,3 +638,15 @@ print(f"total_tokens_M:   {total_tokens / 1e6:.1f}")
 print(f"num_steps:        {step}")
 print(f"num_params_M:     {num_params / 1e6:.1f}")
 print(f"depth:            {DEPTH}")
+
+# Telemetry (REQUIRED): final Othello eval, checkpoint save, result.json
+telemetry.finalize(model, tokenizer, val_bpb, metrics={
+    "training_seconds": total_training_time,
+    "total_seconds": t_end - t_start,
+    "peak_vram_mb": peak_vram_mb,
+    "mfu_percent": steady_state_mfu,
+    "total_tokens_M": total_tokens / 1e6,
+    "num_steps": step,
+    "num_params_M": num_params / 1e6,
+    "depth": DEPTH,
+})

@@ -91,7 +91,9 @@ def generate_shards(out_dir, num_shards, games_per_shard, base_seed=1234, worker
     """Generate parquet shards of self-play games. Deterministic in base_seed.
     Skips shards that already exist."""
     os.makedirs(out_dir, exist_ok=True)
-    workers = workers or max(1, (os.cpu_count() or 2) - 1)
+    # Cap: cloud containers often report the host's core count (e.g. 224)
+    # while the cgroup quota is far smaller.
+    workers = workers or max(1, min(16, (os.cpu_count() or 2) - 1))
     jobs = [(i, out_dir, games_per_shard, base_seed) for i in range(num_shards)]
     with Pool(processes=min(workers, num_shards)) as pool:
         for filepath, dt in pool.imap_unordered(_generate_shard, jobs):

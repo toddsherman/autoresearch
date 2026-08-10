@@ -132,7 +132,28 @@ NIGHTS = [
         "hardware": "1x H100",
         "primary": {"key": "complete_game_rate", "label": "complete games", "direction": "max", "unit": "%", "fmt": "pct"},
     },
+    {
+        "id": "night3",
+        "act": "Act III",
+        "type": "probe",
+        "probe_file": "probe_results.json",
+        "title": "World model — looking inside",
+        "subtitle": "is the Othello board represented inside the trained model? A linear probe for what it knows.",
+        "hardware": "1x H100",
+    },
 ]
+
+
+def build_probe_night(cfg):
+    """Load the world-model probe results into a site bundle (Act III)."""
+    night = {k: cfg[k] for k in ("id", "act", "title", "subtitle", "hardware")}
+    night["type"] = "probe"
+    path = cfg["probe_file"]
+    if not os.path.exists(path):
+        night.update({"status": "pending", "probe": None})
+        return night
+    night.update({"status": "complete", "probe": json.load(open(path))})
+    return night
 
 
 def build_night(cfg):
@@ -162,7 +183,8 @@ def main():
     parser.add_argument("--out", default=os.path.join("site", "data.js"))
     args = parser.parse_args()
 
-    nights = [build_night(cfg) for cfg in NIGHTS]
+    nights = [build_probe_night(cfg) if cfg.get("type") == "probe" else build_night(cfg)
+              for cfg in NIGHTS]
     if not any(n["status"] == "complete" for n in nights):
         sys.exit("No night telemetry found — has any night been run?")
 
@@ -178,7 +200,7 @@ def main():
         f.write("window.RESEARCH_DATA = ")
         json.dump(research, f, separators=(",", ":"))
         f.write(";\n")
-    summary = ", ".join(f"{n['id']}:{len(n['runs'])}runs/{n['status']}" for n in nights)
+    summary = ", ".join(f"{n['id']}:{len(n.get('runs', []))}runs/{n['status']}" for n in nights)
     print(f"Wrote {args.out} ({os.path.getsize(args.out) // 1024} KB): {summary}")
 
 

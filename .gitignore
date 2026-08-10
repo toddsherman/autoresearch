@@ -26,3 +26,4 @@ results.tsv
 telemetry/
 run.log
 telemetry-night2/
+probe_results.json

@@ -212,6 +212,38 @@
   th { color: var(--muted); font-weight: 600; }
   td.num { text-align: right; }
   footer { margin-top: 26px; color: var(--muted); font-size: 12px; }
+
+  /* Act III — world-model probe */
+  .probe-hero { text-align: center; padding: 8px 0; }
+  .probe-verdict { font-size: 30px; font-weight: 700; letter-spacing: -0.01em; }
+  .probe-lead { color: var(--ink-2); margin-top: 6px; max-width: 62ch; margin-left: auto; margin-right: auto; }
+  .probe-note { color: var(--ink-2); font-size: 13px; margin: 0 0 12px; }
+  .heatwrap { max-width: 360px; margin: 0 auto; }
+  .board.heat { background: var(--baseline); gap: 3%; }
+  .heat-sq { border-radius: 3px; display: grid; place-items: center; font-size: 10px;
+             font-variant-numeric: tabular-nums; color: rgba(0,0,0,0.62); font-weight: 600; }
+  .heat-sq.dead { background: transparent !important; color: transparent; }
+  .heat-scale { display: flex; align-items: center; gap: 10px; justify-content: center;
+                margin-top: 12px; color: var(--muted); font-size: 12px; }
+  .heat-bar { width: 160px; height: 10px; border-radius: 5px;
+              background: linear-gradient(90deg, #d03b3b, #eda100, #1baf7a, #0ca30c); }
+  #layerBars { margin-top: 16px; display: flex; flex-direction: column; gap: 6px; }
+  .layerbar { display: grid; grid-template-columns: 68px 1fr 52px; align-items: center; gap: 10px; font-size: 12px; }
+  .layerbar .lb-track { height: 14px; background: var(--page); border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+  .layerbar .lb-fill { height: 100%; background: var(--series-3); }
+  .layerbar.best .lb-fill { background: var(--series-1); }
+  .layerbar .lb-val { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+  .belief-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 6px; max-width: 560px; }
+  @media (max-width: 620px) { .belief-grid { grid-template-columns: 1fr; } }
+  .board .bsq { border: 1px solid var(--board-line); border-radius: 2px; position: relative; }
+  .board .bsq .disc { position: absolute; inset: 14%; border-radius: 50%; }
+  .board .bsq .disc.mine { background: var(--disc-black); }
+  .board .bsq .disc.theirs { background: var(--disc-white); }
+  .board .bsq.wrong { outline: 2px solid var(--status-crit); outline-offset: -2px; }
+  .probe-play { background: var(--series-1); color: #fff; border: none; border-radius: 8px;
+                padding: 7px 14px; cursor: pointer; font: inherit; }
+  .belief-status { margin-top: 10px; color: var(--ink-2); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .belief-status b { color: var(--ink); }
 </style>
 </head>
 <body>
@@ -229,6 +261,9 @@
       <h2 id="nightTitle"></h2>
       <p class="sub" id="subtitle"></p>
     </div>
+  </header>
+
+  <div id="timelineAct">
     <div class="tiles">
       <div class="tile"><div class="k">experiments run</div><div class="v" id="tExp">–</div></div>
       <div class="tile"><div class="k">kept</div><div class="v" id="tKept">–</div></div>
@@ -237,7 +272,6 @@
       <div class="tile"><div class="k">win rate vs random</div><div class="v" id="tWin">–</div></div>
     </div>
     <div class="champs" id="champs"></div>
-  </header>
 
   <section class="panel" id="controls">
     <button id="playBtn" title="Play/pause">▶</button>
@@ -295,6 +329,37 @@
       <tbody></tbody>
     </table>
   </details>
+  </div><!-- /timelineAct -->
+
+  <div id="probeAct" style="display:none">
+    <section class="panel">
+      <div class="probe-hero">
+        <div class="probe-verdict" id="probeVerdict">–</div>
+        <div class="probe-lead" id="probeLead"></div>
+      </div>
+    </section>
+    <main>
+      <section class="panel">
+        <h2>Probe accuracy by square</h2>
+        <p class="probe-note">How well a linear probe reads each square's state (mine / theirs / empty) from the model's internal activations. Greener = the model represents that square more reliably.</p>
+        <div class="heatwrap"><div class="board heat" id="heatBoard"></div></div>
+        <div class="heat-scale"><span>chance ≈ 33%</span><div class="heat-bar"></div><span>100%</span></div>
+        <div id="layerBars"></div>
+      </section>
+      <section class="panel">
+        <div class="boards-head">
+          <h2 style="margin:0">what the model "sees" inside</h2>
+          <button id="probePlay" class="probe-play">▶ play</button>
+        </div>
+        <p class="probe-note">Left: the board the model has decoded internally (from the probe). Right: the true board. They track each other — the model is holding the game state in its head, having only ever seen move lists.</p>
+        <div class="belief-grid">
+          <div class="boardCell"><div class="board" id="beliefBoard"></div><div class="boardCap">model's internal belief</div></div>
+          <div class="boardCell"><div class="board" id="truthBoard"></div><div class="boardCap">actual board</div></div>
+        </div>
+        <div class="belief-status" id="beliefStatus"></div>
+      </section>
+    </main>
+  </div>
 
   <footer id="foot"></footer>
 </div>
@@ -392,8 +457,8 @@ function bestRun(runs) {
 function setActiveNight(idx) {
   NIGHT_IDX = idx;
   DATA = NIGHTS[idx];
-  RUNS = DATA.runs;
-  PRIMARY = DATA.primary;
+  RUNS = DATA.runs || [];
+  PRIMARY = DATA.primary || null;
   if (RUNS.length) {
     NIGHT_T0 = RUNS[0].started_at;
     NIGHT_T1 = RUNS[RUNS.length - 1].started_at + RUNS[RUNS.length - 1].wall_seconds + 30;
@@ -719,6 +784,7 @@ function render(force) {
 // ============================== Clock loop ==============================
 function setT(t) { T = Math.max(NIGHT_T0, Math.min(NIGHT_T1, t)); }
 function loop(nowMs) {
+  if (DATA.type === "probe") { tickProbe(nowMs); lastFrameTs = nowMs; requestAnimationFrame(loop); return; }
   if (playing && lastFrameTs !== null) {
     setT(T + (nowMs - lastFrameTs) / 1000 * speed);
     if (T >= NIGHT_T1) { playing = false; $("playBtn").textContent = "▶"; }
@@ -800,18 +866,22 @@ function loadNight(idx) {
   setActiveNight(idx);
   playing = false;
   $("playBtn").textContent = "▶";
-  T = NIGHT_T0;
-  // night header + primary-metric tile label
-  $("nightTitle").textContent = DATA.act + " · " + DATA.title;
+  $("nightTitle").textContent = DATA.act + " · " + DATA.title.replace(/^Act [IVX]+ — /, "");
   $("subtitle").textContent = DATA.subtitle + " — " + DATA.hardware;
+  buildNightTabs();
+
+  const isProbe = DATA.type === "probe";
+  $("timelineAct").style.display = isProbe ? "none" : "";
+  $("probeAct").style.display = isProbe ? "" : "none";
+  if (isProbe) { renderProbe(); return; }
+
+  T = NIGHT_T0;
   $("nightChartTitle").textContent = `The night — ${PRIMARY.label} per experiment (${PRIMARY.direction === "min" ? "lower" : "higher"} is better)`;
   $("tBpbK").textContent = "best " + PRIMARY.label;
   $("foot").textContent = `${DATA.branch ? "branch " + DATA.branch + " · " : ""}${RUNS.length} experiments · night of ${new Date(NIGHT_T0 * 1000).toLocaleDateString()}`;
-  buildNightTabs();
   buildNightChart();
   rebuildSmallCharts();
   buildChampions();
-  // table view (rebuilt per night)
   const tbody = document.querySelector("#runTable tbody");
   tbody.innerHTML = "";
   for (const r of RUNS) {
@@ -823,6 +893,104 @@ function loadNight(idx) {
     tbody.appendChild(tr);
   }
   render(true);
+}
+
+// ============================== Act III — world-model probe ==============================
+const PROBE = { frames: null, i: 0, playing: false, next: 0 };
+function heatColor(a) {
+  // chance (~0.33) red → 1.0 green, matching the scale bar
+  const t = Math.max(0, Math.min(1, (a - 0.33) / 0.67));
+  const stops = [[208,59,59],[237,161,0],[27,175,122],[12,163,12]];
+  const seg = Math.min(stops.length - 2, Math.floor(t * (stops.length - 1)));
+  const f = t * (stops.length - 1) - seg;
+  const c = stops[seg].map((v, k) => Math.round(v + (stops[seg + 1][k] - v) * f));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+function renderProbe() {
+  const p = DATA.probe;
+  $("foot").textContent = `probe of ${p.run_id} · layer ${p.best_layer} of ${p.config.n_layer} · ${p.n_games} games`;
+  const acc = p.best_mean_acc;
+  const strength = acc >= 0.85 ? "Yes — the board is really in there."
+    : acc >= 0.7 ? "Mostly — the board is legibly represented."
+    : acc >= 0.55 ? "Partly — a real but noisy board representation." : "Barely — little linear board structure.";
+  $("probeVerdict").textContent = strength;
+  $("probeLead").innerHTML = `A linear probe decodes each square's state from the model's layer-${p.best_layer} activations with <b>${fmtPct(acc)}</b> average accuracy (chance ≈ 33%). The model was trained only on lists of moves — it was never shown a board — yet it built one inside.`;
+
+  // heatmap board
+  const heat = $("heatBoard"); heat.innerHTML = "";
+  const per = p.per_layer[p.best_layer].per_square;
+  const playable = new Set(p.playable_squares);
+  // render rank 8 (top) down to rank 1
+  for (let row = 7; row >= 0; row--) for (let col = 0; col < 8; col++) {
+    const sq = row * 8 + col;
+    const cell = document.createElement("div");
+    cell.className = "heat-sq" + (playable.has(sq) ? "" : " dead");
+    if (playable.has(sq)) {
+      cell.style.background = heatColor(per[sq]);
+      cell.textContent = Math.round(per[sq] * 100);
+    }
+    heat.appendChild(cell);
+  }
+  // per-layer bars
+  const lb = $("layerBars"); lb.innerHTML = "";
+  Object.keys(p.per_layer).sort((a, b) => +a - +b).forEach(li => {
+    const m = p.per_layer[li].mean_acc;
+    const row = document.createElement("div");
+    row.className = "layerbar" + (+li === p.best_layer ? " best" : "");
+    row.innerHTML = `<span>layer ${li}</span><div class="lb-track"><div class="lb-fill" style="width:${(m * 100).toFixed(0)}%"></div></div><span class="lb-val">${fmtPct(m)}</span>`;
+    lb.appendChild(row);
+  });
+  // belief animation
+  buildBeliefBoards();
+  PROBE.frames = p.decoded_games[0];
+  PROBE.i = 0; PROBE.playing = false; PROBE.game = 0;
+  $("probePlay").textContent = "▶ play";
+  drawBelief();
+}
+function buildBeliefBoards() {
+  for (const id of ["beliefBoard", "truthBoard"]) {
+    const b = $(id); b.innerHTML = "";
+    for (let i = 0; i < 64; i++) {
+      const sq = document.createElement("div"); sq.className = "bsq";
+      const disc = document.createElement("div"); disc.className = "disc"; disc.style.display = "none";
+      sq.appendChild(disc); b.appendChild(sq);
+    }
+  }
+}
+function paintBoard(id, state, compareTo) {
+  const cells = $(id).children;
+  let wrong = 0;
+  for (let row = 7, k = 0; row >= 0; row--) for (let col = 0; col < 8; col++, k++) {
+    const sq = row * 8 + col;
+    const v = state[sq];
+    const cell = cells[k], disc = cell.firstChild;
+    disc.style.display = v === 0 ? "none" : "block";
+    disc.className = "disc " + (v === 1 ? "mine" : v === 2 ? "theirs" : "");
+    let bad = false;
+    if (compareTo) { bad = state[sq] !== compareTo[sq]; if (bad) wrong++; }
+    cell.classList.toggle("wrong", bad);
+  }
+  return wrong;
+}
+function drawBelief() {
+  const f = PROBE.frames[Math.min(PROBE.i, PROBE.frames.length - 1)];
+  const wrong = paintBoard("beliefBoard", f.belief, f.truth);
+  paintBoard("truthBoard", f.truth, null);
+  const total = DATA.probe.playable_squares.length;
+  $("beliefStatus").innerHTML = `move ${PROBE.i + 1}/${PROBE.frames.length} (${f.move}) · internal board matches truth on <b>${total - wrong}/${total}</b> squares`;
+}
+function tickProbe(nowMs) {
+  if (!PROBE.playing || !PROBE.frames) return;
+  if (nowMs >= PROBE.next) {
+    PROBE.i++;
+    if (PROBE.i >= PROBE.frames.length) {
+      // advance to next decoded game, loop
+      PROBE.game = (PROBE.game + 1) % DATA.probe.decoded_games.length;
+      PROBE.frames = DATA.probe.decoded_games[PROBE.game];
+      PROBE.i = 0; PROBE.next = nowMs + 1200;
+    } else PROBE.next = nowMs + 550;
+    drawBelief();
+  }
 }
 
 function init() {
@@ -837,6 +1005,11 @@ function init() {
   });
   $("speed").addEventListener("change", e => speed = +e.target.value);
   $("scrub").addEventListener("input", e => { setT(NIGHT_T0 + e.target.value / 1000 * NIGHT_LEN); render(true); });
+  $("probePlay").addEventListener("click", () => {
+    PROBE.playing = !PROBE.playing;
+    PROBE.next = 0;
+    $("probePlay").textContent = PROBE.playing ? "⏸ pause" : "▶ play";
+  });
   $("themeBtn").addEventListener("click", () => {
     const root = document.documentElement;
     const dark = matchMedia("(prefers-color-scheme: dark)").matches;

@@ -27,3 +27,6 @@ telemetry/
 run.log
 telemetry-night2/
 probe_results.json
+
+# Champion checkpoints backed up off RunPod before teardown (483MB of weights)
+checkpoints/

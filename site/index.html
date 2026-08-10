@@ -260,7 +260,7 @@
     <div class="wrap">
       <div class="callout reveal">
         <div class="h">Then it found a loophole</div>
-        <p>Partway through, the AI discovered a clever data trick that nudged its prediction score higher, but quietly made its actual <em>play</em> worse. It was optimizing the thing I measured, not the thing I wanted. That gap between a proxy and the real goal is a classic trap, sometimes called <a href="https://en.wikipedia.org/wiki/Goodhart%27s_law" target="_blank" rel="noopener">Goodhart's law</a>: when a measure becomes the target, it stops being a good measure.</p>
+        <p>Partway through, the AI discovered a clever data trick: it multiplied its training games eightfold by rotating and mirroring the board, which is symmetric (a move known as dihedral, or 8x, data augmentation). That nudged its prediction score higher but quietly made its actual <em>play</em> worse. It was optimizing the thing I measured, not the thing I wanted. That gap between a proxy and the real goal is a classic trap, sometimes called <a href="https://en.wikipedia.org/wiki/Goodhart%27s_law" target="_blank" rel="noopener">Goodhart's law</a>: when a measure becomes the target, it stops being a good measure.</p>
       </div>
       <p class="reveal">So I changed the question.</p>
     </div>
@@ -287,6 +287,7 @@
         <div class="stat"><div class="v" id="s_legal">–</div><div class="k">of individual moves are legal</div></div>
         <div class="stat"><div class="v" id="s_win">–</div><div class="k">win rate against random play</div></div>
       </div>
+      <p class="reveal sub" style="margin-top:2rem">The two goals really do pull apart. This model plays far better, yet it is much <em>worse</em> at the first run's test of raw next-move prediction: about 4.2 bits per byte against 0.72 for the earlier champion, where lower is better. And when the AI reached for that same board-symmetry trick again here, it threw it away, because under this goal it lowered legal play instead of lifting the score. The same idea, opposite verdict, once the target changed.</p>
     </div>
     <figure class="reveal" data-viz="run2boards">
       <div class="boards three" id="run2boards"></div>
@@ -302,7 +303,7 @@
       <span class="steplabel reveal">Looking inside</span>
       <h2 class="reveal">But does it actually "get" the board?</h2>
       <p class="reveal">Here's what nagged me. The model only ever saw move lists, never a board. So is it really tracking the game, or just parroting patterns it has seen? There's a way to check, using a technique called <a href="https://en.wikipedia.org/wiki/Mechanistic_interpretability" target="_blank" rel="noopener">mechanistic interpretability</a>, which studies a model's inner workings to understand how it reaches its answers. You peek inside the model's internal activity as it reads a game and ask whether the current board is written down in there somewhere.</p>
-      <p class="reveal sub">It turns out the board really is in there. Reading the model's internal activity, we can reconstruct what's on each square (mine, yours, or empty) with <strong>92.8% accuracy</strong>, far above the roughly 33% you'd get by guessing. The further a square moves from paper toward ink below, the more reliably the board shows up in the model's internal activity:</p>
+      <p class="reveal sub">It turns out the board really is in there. Reading the model's internal activity, we can reconstruct what's on each square in the model's own frame (mine, yours, or empty, which reads far more cleanly than black versus white) with <strong>92.8% accuracy</strong>, far above the roughly 33% you'd get by guessing. The picture also sharpens with depth, climbing from about 80% in the model's middle layers to 93% in its later ones. The further a square moves from paper toward ink below, the more reliably the board shows up in the model's internal activity:</p>
     </div>
     <figure class="reveal" data-viz="heat">
       <div class="heatwrap">
@@ -321,7 +322,7 @@
       <div class="beliefstatus" id="beliefStatus"></div>
     </figure>
     <div class="wrap">
-      <p class="reveal sub" style="margin-top:1.6rem">This mirrors a well-known result called "Othello-GPT," where researchers found the same thing in a larger model: evidence that models trained only to predict can build genuine internal models of the world they're predicting. <a href="https://arxiv.org/abs/2210.13382" target="_blank" rel="noopener">(The original paper.)</a></p>
+      <p class="reveal sub" style="margin-top:1.6rem">This mirrors a well-known result called "Othello-GPT," where researchers found the same thing in a larger model: evidence that models trained only to predict can build genuine internal models of the world they're predicting. <a href="https://arxiv.org/abs/2210.13382" target="_blank" rel="noopener">(The original paper</a>; a <a href="https://arxiv.org/abs/2309.00941" target="_blank" rel="noopener">follow-up</a> showed the board is held as a simple linear pattern in "mine versus yours" terms, the same framing used here.)</p>
     </div>
   </div>
 </section>
@@ -336,6 +337,7 @@
       <div class="linkrow"><a href="https://github.com/toddsherman/autoresearch" target="_blank" rel="noopener">The code &amp; full logs</a><span class="d">everything the AI changed, run by run</span></div>
       <div class="linkrow"><a href="https://github.com/karpathy/autoresearch" target="_blank" rel="noopener">autoresearch</a><span class="d">Andrej Karpathy's original idea</span></div>
       <div class="linkrow"><a href="https://arxiv.org/abs/2210.13382" target="_blank" rel="noopener">Othello-GPT</a><span class="d">the emergent "world model" result</span></div>
+      <div class="linkrow"><a href="https://arxiv.org/abs/2309.00941" target="_blank" rel="noopener">Linear world models</a><span class="d">reading the board in "mine vs yours" terms</span></div>
       <div class="linkrow"><a href="https://en.wikipedia.org/wiki/Goodhart%27s_law" target="_blank" rel="noopener">Goodhart's law</a><span class="d">why the first run went sideways</span></div>
     </div>
   </div>

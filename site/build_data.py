@@ -74,12 +74,20 @@ def load_run(runs_dir, record):
             "vs_random": {k: vr.get(k) for k in ("n_games", "wins", "draws", "losses")},
         }
 
+    # A run left "pending" that nevertheless produced a final result.json ran to
+    # completion — its keep/discard verdict just never got recorded before the
+    # agent moved on. For a finished night, present it as "discard" (it was not
+    # advanced) rather than a stray "running" badge. Raw telemetry is untouched.
+    status = record.get("status", "pending")
+    if status == "pending" and result is not None:
+        status = "discard"
+
     return {
         "run_id": record["run_id"],
         "seq": record["seq"],
         "commit": record.get("commit", ""),
         "description": record.get("description", ""),
-        "status": record.get("status", "pending"),
+        "status": status,
         "val_bpb": record.get("val_bpb", 0.0),
         "peak_vram_mb": record.get("peak_vram_mb", 0.0),
         "started_at": record["started_at"],

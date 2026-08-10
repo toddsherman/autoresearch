@@ -79,6 +79,21 @@
   .tile .v { font-size: 24px; font-weight: 600; margin-top: 2px; }
   .tile .v small { font-size: 13px; font-weight: 400; color: var(--ink-2); }
 
+  .champs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0 0; }
+  @media (max-width: 720px) { .champs { grid-template-columns: 1fr; } }
+  .champ {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px; cursor: pointer; text-align: left; color: inherit; font: inherit;
+    border-left: 3px solid var(--series-1); transition: background 0.12s;
+  }
+  .champ:hover { background: var(--page); }
+  .champ.leg { border-left-color: var(--series-3); }
+  .champ .ct { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .champ .cv { font-size: 19px; font-weight: 700; margin: 2px 0; }
+  .champ .cd { font-size: 12px; color: var(--ink-2); }
+  .champ .cj { font-size: 11px; color: var(--series-1); margin-top: 4px; }
+  .champ.leg .cj { color: var(--series-3); }
+
   .panel {
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
     padding: 14px 16px; margin-bottom: 14px;
@@ -202,6 +217,7 @@
       <div class="tile"><div class="k">move legality</div><div class="v" id="tLeg">–</div></div>
       <div class="tile"><div class="k">win rate vs random</div><div class="v" id="tWin">–</div></div>
     </div>
+    <div class="champs" id="champs"></div>
   </header>
 
   <section class="panel" id="controls">
@@ -677,6 +693,39 @@ function rebuildSmallCharts() {
     yMin: 0, yMax: 1,
   });
 }
+// Two headline runs: the val_bpb champion (the agent's optimization target) and
+// the "best Othello player" — the run whose free-running samples were the most
+// legal/complete. They are usually different runs; that gap is the story.
+function buildChampions() {
+  const box = $("champs");
+  const keeps = RUNS.filter(r => r.status === "keep" && r.val_bpb > 0);
+  if (!keeps.length) return;
+  const vch = keeps.reduce((a, b) => b.val_bpb < a.val_bpb ? b : a);
+  const withFinal = RUNS.filter(r => r.final);
+  const lch = withFinal.reduce((a, b) => {
+    const bc = b.final.complete_rate, ac = a.final.complete_rate;
+    if (bc !== ac) return bc > ac ? b : a;
+    return b.final.legality_rate > a.final.legality_rate ? b : a;
+  });
+  function jumpTo(run) { setT(run.started_at + run.startup_seconds + 300 - 1); render(true); box.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  box.innerHTML = "";
+  const c1 = document.createElement("button");
+  c1.className = "champ";
+  c1.innerHTML = `<div class="ct">🏆 best val_bpb — the agent's target</div>` +
+    `<div class="cv">${vch.val_bpb.toFixed(4)}</div>` +
+    `<div class="cd">#${vch.seq} · ${vch.description}</div>` +
+    `<div class="cj">▶ jump to this run</div>`;
+  c1.onclick = () => jumpTo(vch);
+  const c2 = document.createElement("button");
+  c2.className = "champ leg";
+  c2.innerHTML = `<div class="ct">♟ best Othello player — most legal play</div>` +
+    `<div class="cv">${fmtPct(lch.final.legality_rate)} legal · ${fmtPct(lch.final.complete_rate)} complete games</div>` +
+    `<div class="cd">#${lch.seq} · ${lch.description}</div>` +
+    `<div class="cj">▶ jump to this run</div>`;
+  c2.onclick = () => jumpTo(lch);
+  box.appendChild(c1);
+  box.appendChild(c2);
+}
 function init() {
   $("title").textContent = DATA.meta.title;
   $("subtitle").textContent = DATA.meta.subtitle + " — " + DATA.meta.hardware;
@@ -685,6 +734,7 @@ function init() {
   buildNightChart();
   rebuildSmallCharts();
   buildBoards(3);
+  buildChampions();
   // table view
   const tbody = document.querySelector("#runTable tbody");
   for (const r of RUNS) {

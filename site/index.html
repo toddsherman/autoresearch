@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Training a model to play Othello with Autoresearch</title>
-<meta name="description" content="Using Autoresearch — where an AI agent runs its own ML experiments — to train a small model to play Othello from lists of moves. It learned to play, and built a picture of the board inside it.">
+<meta name="description" content="Using Autoresearch, where an AI agent runs its own ML experiments, to train a small model to play Othello from lists of moves. It learned to play, and built a picture of the board inside it.">
 <style>
   :root {
     color-scheme: light;
@@ -62,17 +62,17 @@
   .wide { max-width: 62rem; margin: 0 auto; }
 
   /* Hero */
-  .hero { min-height: 92vh; display: flex; flex-direction: column; justify-content: center; }
+  .hero { min-height: 80vh; display: flex; flex-direction: column; justify-content: center; }
   .kicker { color: var(--muted); font-size: 0.8rem; letter-spacing: 0.14em; text-transform: uppercase; margin: 0 0 1rem; }
   h1 { font-size: clamp(2.1rem, 6vw, 3.6rem); line-height: 1.08; letter-spacing: -0.02em; margin: 0 0 1.2rem; font-weight: 700; }
   .lede { font-size: clamp(1.1rem, 2.4vw, 1.35rem); color: var(--ink-2); margin: 0; max-width: 38rem; }
   .byline { margin-top: 2rem; color: var(--muted); font-size: 0.95rem; }
-  .scrollcue { margin-top: 3.5rem; color: var(--muted); font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem; }
+  .scrollcue { margin-top: 2.4rem; color: var(--muted); font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem; }
   .scrollcue .arw { animation: bob 1.6s ease-in-out infinite; }
   @keyframes bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(4px)} }
 
   /* Narrative blocks */
-  .block { padding: 4.5rem 0; }
+  .block { padding: 2.75rem 0; }
   h2 { font-size: clamp(1.5rem, 3.6vw, 2.1rem); line-height: 1.18; letter-spacing: -0.01em; margin: 0 0 1rem; font-weight: 700; }
   .block p { margin: 0 0 1.15rem; color: var(--ink); }
   .block p.sub { color: var(--ink-2); }
@@ -86,7 +86,7 @@
   @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } html { scroll-behavior: auto; } }
 
   /* figure / viz */
-  figure { margin: 2.2rem 0 0; }
+  figure { margin: 1.5rem 0 0; }
   figcaption { color: var(--muted); font-size: 0.85rem; margin-top: 0.7rem; text-align: center; }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.1rem 1.2rem; }
 
@@ -136,8 +136,8 @@
   .heat { background: var(--board-line); gap: 3%; }
   .hsq { border-radius: 3px; display: grid; place-items: center; font-size: 0.62rem; font-weight: 700; color: rgba(0,0,0,.6); }
   .hsq.dead { background: transparent !important; color: transparent; }
-  .heatscale { display: flex; align-items: center; gap: 0.6rem; justify-content: center; margin-top: 0.9rem; color: var(--muted); font-size: 0.8rem; }
-  .heatbar { width: 9rem; height: 0.6rem; border-radius: 0.3rem; background: linear-gradient(90deg,#cf3b3b,#eda100,#1baf7a,#0ca30c); }
+  .heatscale { display: flex; align-items: center; gap: 0.6rem; justify-content: center; margin-top: 0.9rem; color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+  .heatbar { width: 9rem; height: 0.6rem; border-radius: 0.3rem; background: linear-gradient(90deg,#bfe08f,#7cc85f,#2ba85a,#0c7a1a); }
 
   .belief { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; max-width: 30rem; margin: 1.4rem auto 0; }
   .belief .bcap { font-weight: 600; color: var(--ink-2); }
@@ -167,7 +167,7 @@
   <div class="wrap">
     <p class="kicker reveal">Autoresearch · Othello</p>
     <h1 class="reveal">Training a model to play Othello with Autoresearch</h1>
-    <p class="lede reveal">Autoresearch lets an AI agent run its own machine-learning experiments — editing the code, training, checking results, and trying again, hundreds of times. I pointed it at a small model and asked it to learn Othello from nothing but lists of moves. It learned to play legal games. And when I looked inside, the model had built a picture of the board.</p>
+    <p class="lede reveal">Autoresearch lets an AI agent run its own machine-learning experiments: editing the code, training, checking results, and trying again, hundreds of times. I pointed it at a small model and asked it to learn Othello from nothing but lists of moves. It learned to play legal games. And when I looked inside, the model had built a picture of the board.</p>
     <div class="scrollcue reveal"><span class="arw">↓</span> scroll to see how it went</div>
   </div>
 </section>
@@ -177,8 +177,8 @@
   <div class="wrap">
     <span class="steplabel reveal">What Autoresearch is</span>
     <h2 class="reveal">The AI runs the experiments</h2>
-    <p class="reveal">Improving an AI model normally means a slow human loop: change some code, train the model, check whether it got better, try again — over and over. <a href="https://github.com/karpathy/autoresearch" target="_blank" rel="noopener">Autoresearch</a>, a project by Andrej Karpathy, hands that entire loop to an AI agent so it can run on its own, hundreds of times.</p>
-    <p class="reveal sub">I gave it a concrete job with a clear scorecard: train a small model to play <strong>Othello</strong>. The catch is that the model is never told the rules. It only ever sees finished games written out as lists of moves — like <code>d3&nbsp;c5&nbsp;f6&nbsp;…</code> — the way you might pick up a game by watching thousands of them.</p>
+    <p class="reveal">Improving an AI model normally means a slow human loop: change some code, train the model, check whether it got better, try again, over and over. <a href="https://github.com/karpathy/autoresearch" target="_blank" rel="noopener">Autoresearch</a>, a project by Andrej Karpathy, hands that entire loop to an AI agent so it can run on its own, hundreds of times.</p>
+    <p class="reveal sub">I gave it a concrete job with a clear scorecard: train a small model to play <strong>Othello</strong>. The catch is that the model is never told the rules. It only ever sees finished games written out as lists of moves, like <code>d3&nbsp;c5&nbsp;f6&nbsp;…</code>, the way you might pick up a game by watching thousands of them.</p>
     <p class="reveal sub">Othello is a good test because you can simply check whether the moves the model makes are <em>legal</em>. No opinion required.</p>
   </div>
 </section>
@@ -201,10 +201,10 @@
         <div class="arw">→</div>
         <div class="step"><div class="n">4</div><div class="t">Keep the change if better, undo it if not</div></div>
       </div>
-      <div class="loopnote">↻ then do it again — a fresh idea every few minutes, all night</div>
+      <div class="loopnote">↻ then do it again: a fresh idea every few minutes, all night</div>
     </figure>
     <div class="wrap">
-      <p class="reveal sub" style="margin-top:2rem">Everything was fair game for the AI to change: the size of the model, how fast it learned, the shape of its internal wiring. My only job was to decide <em>what counts as "better"</em> — the goal it optimizes toward. That choice turned out to matter more than I expected.</p>
+      <p class="reveal sub" style="margin-top:2rem">Everything was fair game for the AI to change: the size of the model, how fast it learned, the shape of its internal wiring. My only job was to decide <em>what counts as "better"</em>, the goal it optimizes toward. That choice turned out to matter more than I expected.</p>
     </div>
   </div>
 </section>
@@ -216,14 +216,14 @@
       <span class="steplabel reveal">The first run &nbsp;<span class="dur">· 91 experiments · about 10 hours</span></span>
       <h2 class="reveal">First, I asked it to be a good guesser</h2>
       <p class="reveal">For the first run, "better" meant one thing: <strong>get better at predicting the next move</strong> in a game. The bet is that if the model can reliably guess what comes next, it must be picking up something real about how Othello works.</p>
-      <p class="reveal sub">It worked. Over about ten hours, the AI kept finding small improvements — each dot below is one experiment; the line tracks its best result so far.</p>
+      <p class="reveal sub">It worked. Over about ten hours, the AI kept finding small improvements. Each dot below is one experiment; the line tracks its best result so far.</p>
     </div>
     <figure class="reveal chart" data-viz="run1chart">
-      <div class="wrap"><div class="chart-title" id="run1title">How well it predicted the next move — lower is better</div></div>
+      <div class="wrap"><div class="chart-title" id="run1title">How well it predicted the next move (lower is better)</div></div>
       <div id="run1chart"></div>
     </figure>
     <div class="wrap">
-      <p class="reveal" style="margin-top:2.4rem">Here's the surprising part. I never asked the model to follow the rules — only to predict moves. But as it got better at guessing, it started <strong>actually playing legal Othello</strong> on its own. Watch the difference between its very first attempts and its best moment in this run:</p>
+      <p class="reveal" style="margin-top:2.4rem">Here's the surprising part. I never asked the model to follow the rules, only to predict moves. But as it got better at guessing, it started <strong>actually playing legal Othello</strong> on its own. Watch the difference between its early attempts and its best moment in this run:</p>
     </div>
     <figure class="reveal" data-viz="run1boards">
       <div class="boards two">
@@ -235,7 +235,7 @@
     <div class="wrap">
       <div class="callout reveal">
         <div class="h">Then it found a loophole</div>
-        <p>Partway through, the AI discovered a clever data trick that nudged its prediction score higher — but quietly made its actual <em>play</em> worse. It was optimizing the thing I measured, not the thing I wanted. That gap between a proxy and the real goal is a classic trap, sometimes called <a href="https://en.wikipedia.org/wiki/Goodhart%27s_law" target="_blank" rel="noopener">Goodhart's law</a>: when a measure becomes the target, it stops being a good measure.</p>
+        <p>Partway through, the AI discovered a clever data trick that nudged its prediction score higher, but quietly made its actual <em>play</em> worse. It was optimizing the thing I measured, not the thing I wanted. That gap between a proxy and the real goal is a classic trap, sometimes called <a href="https://en.wikipedia.org/wiki/Goodhart%27s_law" target="_blank" rel="noopener">Goodhart's law</a>: when a measure becomes the target, it stops being a good measure.</p>
       </div>
       <p class="reveal">So I changed the question.</p>
     </div>
@@ -248,15 +248,15 @@
     <div class="wrap">
       <span class="steplabel reveal">The second run &nbsp;<span class="dur">· 39 experiments · about 5 hours</span></span>
       <h2 class="reveal">Then I asked it to actually play</h2>
-      <p class="reveal">This time "better" meant the thing I really cared about: <strong>play a complete, fully legal game</strong> — start to finish, without a single illegal move. A much harder bar, and one the loophole from before couldn't fake.</p>
-      <p class="reveal sub">It climbed fast, and this run knew when to quit — I'd set it to stop automatically once it stopped improving, so it wrapped itself up after about five hours instead of running until the money ran out.</p>
+      <p class="reveal">This time "better" meant the thing I really cared about: <strong>play a complete, fully legal game</strong>, start to finish, with no illegal moves at all. A much harder bar, and one the loophole from before couldn't fake.</p>
+      <p class="reveal sub">It climbed fast, and this run knew when to quit. I'd set it to stop automatically once it stopped improving, so it wrapped itself up after about five hours instead of running until the money ran out.</p>
     </div>
     <figure class="reveal chart" data-viz="run2chart">
-      <div class="wrap"><div class="chart-title">Share of games played legally start-to-finish — higher is better</div></div>
+      <div class="wrap"><div class="chart-title">Share of games played legally start to finish (higher is better)</div></div>
       <div id="run2chart"></div>
     </figure>
     <div class="wrap">
-      <p class="reveal" style="margin-top:2.4rem">By the end, the model had genuinely learned the game — from nothing but lists of moves:</p>
+      <p class="reveal" style="margin-top:2.4rem">By the end, the model had genuinely learned the game, from nothing but lists of moves:</p>
       <div class="stats reveal">
         <div class="stat"><div class="v grn" id="s_complete">–</div><div class="k">of its games are legal from start to finish</div></div>
         <div class="stat"><div class="v" id="s_legal">–</div><div class="k">of individual moves are legal</div></div>
@@ -265,7 +265,7 @@
     </div>
     <figure class="reveal" data-viz="run2boards">
       <div class="boards three" id="run2boards"></div>
-      <figcaption>The trained model playing itself — real games, filling the board.</figcaption>
+      <figcaption>The trained model playing itself: real games, filling the board.</figcaption>
     </figure>
   </div>
 </section>
@@ -276,17 +276,17 @@
     <div class="wrap">
       <span class="steplabel reveal">Looking inside</span>
       <h2 class="reveal">But does it actually "get" the board?</h2>
-      <p class="reveal">Here's what nagged me. The model only ever saw move lists — never a board. So is it really tracking the game, or just parroting patterns it's seen? There's a way to check: you can peek inside the model's internal activity as it reads a game and ask whether the current board is written down in there somewhere.</p>
-      <p class="reveal sub">It is. A simple readout of the model's internals can reconstruct what's on each square — mine, yours, or empty — with <strong>92.8% accuracy</strong> (random guessing would be about 33%). The greener a square below, the more reliably the board is represented in the model's "mind":</p>
+      <p class="reveal">Here's what nagged me. The model only ever saw move lists, never a board. So is it really tracking the game, or just parroting patterns it has seen? There's a way to check, using a technique called <a href="https://en.wikipedia.org/wiki/Mechanistic_interpretability" target="_blank" rel="noopener">mechanistic interpretability</a>, which studies a model's inner workings to understand how it reaches its answers. You peek inside the model's internal activity as it reads a game and ask whether the current board is written down in there somewhere.</p>
+      <p class="reveal sub">It turns out the board really is in there. Reading the model's internal activity, we can reconstruct what's on each square (mine, yours, or empty) with <strong>92.8% accuracy</strong>, far above the roughly 33% you'd get by guessing. The greener a square below, the more reliably the board shows up in the model's internal activity:</p>
     </div>
     <figure class="reveal" data-viz="heat">
       <div class="heatwrap">
         <div class="board heat" id="heatBoard"></div>
-        <div class="heatscale"><span>guessing (~33%)</span><div class="heatbar"></div><span>100%</span></div>
+        <div class="heatscale"><span id="heatLo">–</span><div class="heatbar"></div><span id="heatHi">–</span></div>
       </div>
     </figure>
     <div class="wrap">
-      <p class="reveal" style="margin-top:2rem">We can even watch it happen. On the left is the board the model has reconstructed internally as it reads a game; on the right is the real board. They track each other — the model is holding the game in its head, move by move:</p>
+      <p class="reveal" style="margin-top:2rem">We can even watch it happen. On the left is the board the model has reconstructed internally as it reads a game; on the right is the real board. They track each other closely: the model is holding the game in its head, move by move:</p>
     </div>
     <figure class="reveal" data-viz="belief">
       <div class="belief">
@@ -296,7 +296,7 @@
       <div class="beliefstatus" id="beliefStatus"></div>
     </figure>
     <div class="wrap">
-      <p class="reveal sub" style="margin-top:1.6rem">This mirrors a well-known result called "Othello-GPT," where researchers found the same thing in a larger model — evidence that models trained only to predict can build genuine internal models of the world they're predicting. <a href="https://arxiv.org/abs/2210.13382" target="_blank" rel="noopener">(The original paper.)</a></p>
+      <p class="reveal sub" style="margin-top:1.6rem">This mirrors a well-known result called "Othello-GPT," where researchers found the same thing in a larger model: evidence that models trained only to predict can build genuine internal models of the world they're predicting. <a href="https://arxiv.org/abs/2210.13382" target="_blank" rel="noopener">(The original paper.)</a></p>
     </div>
   </div>
 </section>
@@ -305,18 +305,18 @@
 <section class="block">
   <div class="wrap">
     <span class="steplabel reveal">In short</span>
-    <p class="pull reveal">Running on its own, Autoresearch trained a small model to play legal Othello — worked around a pitfall it discovered along the way — and ended with a model that had quietly built a map of the board it was never shown.</p>
-    <p class="reveal sub" style="margin-top:1.6rem">All told: about 130 experiments across the two runs, roughly 15 hours of compute on a rented GPU, for around $50. The model, the experiments, and the analysis are real — every run is in the logs.</p>
+    <p class="pull reveal">Running on its own, Autoresearch trained a small model to play legal Othello, worked around a pitfall it discovered along the way, and ended with a model that had quietly built a map of the board it was never shown.</p>
+    <p class="reveal sub" style="margin-top:1.6rem">All told: about 130 experiments across the two runs, roughly 15 hours of compute on a rented GPU, for around $50. Every run is in the logs.</p>
     <div class="links reveal">
-      <div class="linkrow"><a href="https://github.com/toddsherman/autoresearch" target="_blank" rel="noopener">The code &amp; full logs</a><span class="d">— everything the AI changed, run by run</span></div>
-      <div class="linkrow"><a href="https://github.com/karpathy/autoresearch" target="_blank" rel="noopener">autoresearch</a><span class="d">— Andrej Karpathy's original idea</span></div>
-      <div class="linkrow"><a href="https://arxiv.org/abs/2210.13382" target="_blank" rel="noopener">Othello-GPT</a><span class="d">— the emergent "world model" result</span></div>
-      <div class="linkrow"><a href="https://en.wikipedia.org/wiki/Goodhart%27s_law" target="_blank" rel="noopener">Goodhart's law</a><span class="d">— why the first run went sideways</span></div>
+      <div class="linkrow"><a href="https://github.com/toddsherman/autoresearch" target="_blank" rel="noopener">The code &amp; full logs</a><span class="d">everything the AI changed, run by run</span></div>
+      <div class="linkrow"><a href="https://github.com/karpathy/autoresearch" target="_blank" rel="noopener">autoresearch</a><span class="d">Andrej Karpathy's original idea</span></div>
+      <div class="linkrow"><a href="https://arxiv.org/abs/2210.13382" target="_blank" rel="noopener">Othello-GPT</a><span class="d">the emergent "world model" result</span></div>
+      <div class="linkrow"><a href="https://en.wikipedia.org/wiki/Goodhart%27s_law" target="_blank" rel="noopener">Goodhart's law</a><span class="d">why the first run went sideways</span></div>
     </div>
   </div>
 </section>
 
-<footer><div class="wrap">The model, experiments, and analysis are real; the writing keeps it approachable rather than exhaustive. The full logs and code are linked above.</div></footer>
+<div style="height:3rem"></div>
 
 <script src="data.js"></script>
 <script>
@@ -352,7 +352,7 @@ function drawFrame(rec){const a=rec.a,fi=Math.min(rec.i,a.frames.length-1),f=a.f
   if(rec.capEl){let t="move "+fi+"/"+a.total;
     if(atEnd&&a.illegalTok!=null){if(a.illegalSq!=null)rec.sqs[a.illegalSq].classList.add("illegal");t='illegal move: <span class="ill">'+a.illegalTok+'</span>';}
     else if(atEnd&&a.complete){t='<span class="done">complete legal game</span> · '+a.black+'–'+a.white;}
-    rec.capEl.innerHTML=(rec.prefix?rec.prefix+" — ":"")+t;}
+    rec.capEl.innerHTML=(rec.prefix?rec.prefix+" · ":"")+t;}
 }
 const MPS=6, HOLD=1600;
 function tick(now){for(const rec of anims){if(!rec.active)continue;if(now>=rec.next){const atEnd=rec.i>=rec.a.frames.length-1;if(atEnd){rec.i=0;rec.next=now+500;}else{rec.i++;rec.next=now+((rec.i>=rec.a.frames.length-1)?HOLD:1000/MPS);}drawFrame(rec);}}
@@ -387,9 +387,14 @@ function drawChart(el, run, key, dir){
 
 // ====================== probe: heatmap + belief ======================
 const CENTER=new Set([27,28,35,36]);
-function heatColor(a){const t=Math.max(0,Math.min(1,(a-0.33)/0.67));const st=[[207,59,59],[237,161,0],[27,175,122],[12,163,12]];const seg=Math.min(st.length-2,Math.floor(t*(st.length-1)));const f=t*(st.length-1)-seg;const c=st[seg].map((v,k)=>Math.round(v+(st[seg+1][k]-v)*f));return"rgb("+c[0]+","+c[1]+","+c[2]+")";}
-function drawHeat(){const el=$("heatBoard");el.innerHTML="";const per=PROBE.per_layer[PROBE.best_layer].per_square;const play=new Set(PROBE.playable_squares);
-  for(let row=7;row>=0;row--)for(let col=0;col<8;col++){const sq=row*8+col;const c=document.createElement("div");c.className="hsq"+(play.has(sq)?"":" dead");if(play.has(sq)){c.style.background=heatColor(per[sq]);c.textContent=Math.round(per[sq]*100);}el.appendChild(c);}}
+// green-only ramp; caller passes t in [0,1] normalized to the observed range
+function heatColor(t){t=Math.max(0,Math.min(1,t));const st=[[191,224,143],[124,200,95],[43,168,90],[12,122,26]];const seg=Math.min(st.length-2,Math.floor(t*(st.length-1)));const f=t*(st.length-1)-seg;const c=st[seg].map((v,k)=>Math.round(v+(st[seg+1][k]-v)*f));return"rgb("+c[0]+","+c[1]+","+c[2]+")";}
+function drawHeat(){const el=$("heatBoard");el.innerHTML="";const per=PROBE.per_layer[PROBE.best_layer].per_square;const play=PROBE.playable_squares;
+  // map colors across the actual observed range so differences are visible
+  const vals=play.map(s=>per[s]); const lo=Math.min(...vals), hi=Math.max(...vals);
+  $("heatLo").textContent=Math.round(lo*100)+"%"; $("heatHi").textContent=Math.round(hi*100)+"%";
+  const playset=new Set(play);
+  for(let row=7;row>=0;row--)for(let col=0;col<8;col++){const sq=row*8+col;const c=document.createElement("div");c.className="hsq"+(playset.has(sq)?"":" dead");if(playset.has(sq)){c.style.background=heatColor((per[sq]-lo)/(hi-lo||1));c.textContent=Math.round(per[sq]*100);}el.appendChild(c);}}
 let beliefSqs=null, truthSqs=null, bFrames=null, bI=0, bNext=0, bGame=0, bActive=false;
 function buildBelief(){beliefSqs=buildBoard($("beliefBoard"));truthSqs=buildBoard($("truthBoard"));bFrames=PROBE.decoded_games[0];bI=0;bGame=0;drawBelief();}
 function paint(sqs,state,cmp){let wrong=0;for(let row=7,k=0;row>=0;row--)for(let col=0;col<8;col++,k++){const sq=row*8+col,v=state[sq],cell=sqs[k],d=cell.firstChild;d.style.display=v===0?"none":"block";d.className="disc "+(v===1?"b":v===2?"w":"");let bad=false;if(cmp){bad=state[sq]!==cmp[sq];if(bad)wrong++;}cell.classList.toggle("wrong",bad);}return wrong;}
@@ -401,7 +406,7 @@ const vizInit={
   run1chart(){drawChart($("run1chart"),RUN1,"val_bpb","min");},
   run1boards(){
     // only use games whose tokens are all valid square names (untrained models
-    // emit random byte-tokens that decode to garbage — skip those)
+    // emit random byte-tokens that decode to garbage, so skip those)
     const clean=g=>g&&g.moves&&g.moves.split(/\s+/).every(t=>/^[a-h][1-8]$/.test(t));
     const allGames=[];RUN1.runs.slice().sort((a,b)=>a.seq-b.seq).forEach(r=>(r.milestones||[]).forEach(m=>(m.games||[]).forEach(g=>allGames.push({g,seq:r.seq}))));
     // early: earliest clean game that plays a few real moves, then an illegal one
@@ -436,7 +441,7 @@ const io=new IntersectionObserver((entries)=>{
     const v=el.getAttribute("data-viz");
     if(v&&!seen.has(el)){seen.add(el);(vizInit[v]||function(){})();}
   }
-},{threshold:0.18, rootMargin:"0px 0px -8% 0px"});
+},{threshold:0.06, rootMargin:"0px 0px 2% 0px"});
 document.querySelectorAll(".reveal,[data-viz]").forEach(el=>io.observe(el));
 
 // scroll progress bar

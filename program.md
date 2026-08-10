@@ -1,6 +1,9 @@
-# autoresearch
+# autoresearch — Night 2: learning to *play* Othello
 
-This is an experiment to have the LLM do its own research.
+This is an experiment to have the LLM do its own research. This run's objective
+is **complete_game_rate** — teaching a small GPT to play fully legal Othello
+games — not the val_bpb compression objective of the first run. (Night 1's
+`program.md` is preserved in git history.)
 
 ## Setup
 
@@ -39,15 +42,17 @@ transcripts alone.
 **What you CANNOT do:**
 - Modify `prepare.py`. It is read-only. It contains the fixed evaluation, data loading, tokenizer, and training constants (time budget, sequence length, etc).
 - Modify `telemetry.py`, `run_experiment.py`, or anything in `othello/`. These are read-only instrumentation and rules-engine code.
-- Remove or break the telemetry hooks in `train.py`. The calls to `telemetry.init_run`, `telemetry.log_step`, `telemetry.maybe_sample`, and `telemetry.finalize` must remain in place and functional, and the model must remain callable as `model(idx) -> logits` for a (B, T) tensor of token ids. **A run with broken or missing telemetry is invalid regardless of its val_bpb** — treat it as a crash, fix, and re-run.
+- Remove or break the telemetry hooks in `train.py`. The calls to `telemetry.init_run`, `telemetry.log_step`, `telemetry.maybe_sample`, and `telemetry.finalize` must remain in place and functional, and the model must remain callable as `model(idx) -> logits` for a (B, T) tensor of token ids. **A run with broken or missing telemetry is invalid regardless of its score** — treat it as a crash, fix, and re-run.
 - Install new packages or add dependencies. You can only use what's already in `pyproject.toml`.
-- Modify the evaluation harness. The `evaluate_bpb` function in `prepare.py` is the ground truth metric.
+- Modify the evaluation harness. The `evaluate_bpb` and `evaluate_complete_game_rate` functions in `prepare.py` are the ground truth metrics. In particular you may not change the sampling protocol (temperature, seed, number of games) used by the complete-game-rate eval, nor call it yourself with different settings.
 
-**The goal is simple: get the lowest val_bpb.** Since the time budget is fixed, you don't need to worry about training time — it's always 5 minutes. Everything is fair game: change the architecture, the optimizer, the hyperparameters, the batch size, the model size. The only constraint is that the code runs without crashing and finishes within the time budget.
+**The goal: get the highest `complete_game_rate`.** This is the fraction of games the model plays — sampled freely from the opening, at a fixed temperature — that are *fully legal Othello games from start to a finished board*. Higher is better; 1.0 would mean every sampled game is a complete, legal game. This measures whether the model has actually learned to *play* Othello, not just to compress transcripts. Since the time budget is fixed (5 minutes), you don't need to worry about training time. Everything else is fair game: architecture, optimizer, hyperparameters, batch size, model size, and — very much in scope for this objective — how the model is trained to generate (e.g. addressing the gap between teacher-forced training and free-running play). The only hard constraint is that the code runs without crashing and finishes within the time budget.
 
-**VRAM** is a soft constraint. Some increase is acceptable for meaningful val_bpb gains, but it should not blow up dramatically.
+`val_bpb` is still printed every run for continuity with earlier work, but it is **not** your objective this time — do not optimize it. If a change lowers val_bpb but also lowers complete_game_rate, discard it; complete_game_rate is what you keep or discard on.
 
-**Simplicity criterion**: All else being equal, simpler is better. A small improvement that adds ugly complexity is not worth it. Conversely, removing something and getting equal or better results is a great outcome — that's a simplification win. When evaluating whether to keep a change, weigh the complexity cost against the improvement magnitude. A 0.001 val_bpb improvement that adds 20 lines of hacky code? Probably not worth it. A 0.001 val_bpb improvement from deleting code? Definitely keep. An improvement of ~0 but much simpler code? Keep.
+**VRAM** is a soft constraint. Some increase is acceptable for meaningful gains, but it should not blow up dramatically.
+
+**Simplicity criterion**: All else being equal, simpler is better. A tiny improvement that adds ugly complexity is not worth it; removing something and getting equal or better results is a great outcome. Weigh complexity cost against improvement magnitude. Because complete_game_rate is measured over sampled games it is noisier than a smooth loss — treat a change as a real improvement only if it beats the current best by a clear margin (roughly ≥ 0.01, i.e. one more complete game in a hundred is noise, several are not), not by a hair.
 
 **The first run**: Your very first run should always be to establish the baseline, so you will run the training script as is.
 
@@ -57,7 +62,9 @@ Once the script finishes it prints a summary like this:
 
 ```
 ---
-val_bpb:          0.997900
+complete_game_rate: 0.687500
+legal_move_rate:  0.907000
+val_bpb:          0.731200
 training_seconds: 300.1
 total_seconds:    325.9
 peak_vram_mb:     45060.2
@@ -68,36 +75,42 @@ num_params_M:     50.3
 depth:            8
 ```
 
-Note that the script is configured to always stop after 5 minutes, so depending on the computing platform of this computer the numbers might look different. You can extract the key metric from the log file:
+`complete_game_rate` is your objective (higher is better). `legal_move_rate`
+(fraction of individual sampled moves that are legal) is a useful secondary
+signal — it usually moves before complete_game_rate does, so it can tell you a
+change is helping even when complete games are still rare. Note the script
+always stops after 5 minutes, so absolute numbers depend on the platform. You
+can extract the key metrics from the log file:
 
 ```
-grep "^val_bpb:" run.log
+grep "^complete_game_rate:\|^legal_move_rate:\|^val_bpb:" run.log
 ```
 
 ## Logging results
 
 When an experiment is done, log it to `results.tsv` (tab-separated, NOT comma-separated — commas break in descriptions).
 
-The TSV has a header row and 5 columns:
+The TSV has a header row and 6 columns:
 
 ```
-commit	val_bpb	memory_gb	status	description
+commit	complete_game_rate	legal_move_rate	memory_gb	status	description
 ```
 
 1. git commit hash (short, 7 chars)
-2. val_bpb achieved (e.g. 1.234567) — use 0.000000 for crashes
-3. peak memory in GB, round to .1f (e.g. 12.3 — divide peak_vram_mb by 1024) — use 0.0 for crashes
-4. status: `keep`, `discard`, or `crash`
-5. short text description of what this experiment tried
+2. complete_game_rate achieved (e.g. 0.687500) — use 0.000000 for crashes
+3. legal_move_rate achieved (e.g. 0.907000) — use 0.000000 for crashes
+4. peak memory in GB, round to .1f (e.g. 12.3 — divide peak_vram_mb by 1024) — use 0.0 for crashes
+5. status: `keep`, `discard`, or `crash`
+6. short text description of what this experiment tried
 
 Example:
 
 ```
-commit	val_bpb	memory_gb	status	description
-a1b2c3d	0.997900	44.0	keep	baseline
-b2c3d4e	0.993200	44.2	keep	increase LR to 0.04
-c3d4e5f	1.005000	44.0	discard	switch to GeLU activation
-d4e5f6g	0.000000	0.0	crash	double model width (OOM)
+commit	complete_game_rate	legal_move_rate	memory_gb	status	description
+a1b2c3d	0.000000	0.210000	44.0	keep	baseline
+b2c3d4e	0.250000	0.560000	44.2	keep	deeper, narrower model
+c3d4e5f	0.180000	0.520000	44.0	discard	switch to GeLU activation
+d4e5f6g	0.000000	0.000000	0.0	crash	double model width (OOM)
 ```
 
 ## The experiment loop
@@ -110,11 +123,11 @@ LOOP FOREVER:
 2. Tune `train.py` with an experimental idea by directly hacking the code.
 3. git commit
 4. Run the experiment: `uv run run_experiment.py --desc "what this tries" > run.log 2>&1` (redirect everything — do NOT use tee or let output flood your context)
-5. Read out the results: `grep "^val_bpb:\|^peak_vram_mb:" run.log`
+5. Read out the results: `grep "^complete_game_rate:\|^legal_move_rate:\|^peak_vram_mb:" run.log`
 6. If the grep output is empty, the run crashed. Run `tail -n 50 run.log` to read the Python stack trace and attempt a fix. If you can't get things to work after more than a few attempts, give up.
 7. Record the results in the tsv (NOTE: do not commit the results.tsv file, leave it untracked by git)
-8. If val_bpb improved (lower): `uv run run_experiment.py --record-status keep`, and you "advance" the branch, keeping the git commit
-9. If val_bpb is equal or worse: `uv run run_experiment.py --record-status discard`, and you git reset back to where you started
+8. If complete_game_rate improved (higher, by a clear margin): `uv run run_experiment.py --record-status keep`, and you "advance" the branch, keeping the git commit
+9. If complete_game_rate is equal or worse: `uv run run_experiment.py --record-status discard`, and you git reset back to where you started
 10. If the run crashed: `uv run run_experiment.py --record-status crash`
 
 The idea is that you are a completely autonomous researcher trying things out. If they work, keep. If they don't, discard. And you're advancing the branch so that you can iterate. If you feel like you're getting stuck in some way, you can rewind but you should probably do this very very sparingly (if ever).

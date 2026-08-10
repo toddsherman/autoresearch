@@ -313,6 +313,51 @@ def evaluate_bpb(model, tokenizer, batch_size):
         total_bytes += nbytes.sum().item()
     return total_nats / (math.log(2) * total_bytes)
 
+
+# Night 2 primary metric. Fixed sampling protocol so it cannot be gamed via
+# decoding knobs — the agent can only improve it by making the model itself
+# play more legal Othello. Higher is better.
+COMPLETE_GAME_EVAL_GAMES = 512   # large N keeps the metric low-variance
+COMPLETE_GAME_EVAL_SEED = 20260810
+COMPLETE_GAME_EVAL_TEMPERATURE = 1.0
+COMPLETE_GAME_EVAL_MAX_TOKENS = 70  # a full Othello game is 60 moves
+
+
+@torch.no_grad()
+def evaluate_complete_game_rate(model, tokenizer):
+    """
+    Complete-legal-game rate: the fraction of freely-sampled games that are a
+    fully legal Othello game from the opening move to a terminal position.
+
+    The model generates unconditioned from BOS at a FIXED temperature and seed
+    over a FIXED number of games; each transcript is checked against the real
+    rules engine. Finishing a whole legal game requires ~60 legal moves in a
+    row, so this cannot be faked without genuine board competence, and — unlike
+    a free-running metric that exposes temperature/seed — nothing here is under
+    the training code's control. DO NOT CHANGE.
+
+    Returns (complete_game_rate, legal_move_rate), both in [0, 1].
+    """
+    from othello.modeleval import sample_games
+    # Use the eager (uncompiled) module to avoid torch.compile recompiling on
+    # the variable-length sequences that autoregressive sampling produces.
+    eager = getattr(model, "_orig_mod", model)
+    device = next(eager.parameters()).device
+
+    def model_fn(idx):
+        with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
+            return eager(idx)
+
+    _, stats = sample_games(
+        model_fn, tokenizer,
+        n_games=COMPLETE_GAME_EVAL_GAMES,
+        max_new_tokens=COMPLETE_GAME_EVAL_MAX_TOKENS,
+        temperature=COMPLETE_GAME_EVAL_TEMPERATURE,
+        seed=COMPLETE_GAME_EVAL_SEED,
+        device=str(device),
+    )
+    return stats["complete_rate"], stats["legality_rate"]
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------

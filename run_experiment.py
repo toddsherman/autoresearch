@@ -34,6 +34,7 @@ TRAIN_CMD = os.environ.get("AUTORESEARCH_TRAIN_CMD", "uv run train.py")
 TIMEOUT_SECONDS = 600  # hard kill per program.md
 
 SUMMARY_KEYS = [
+    "complete_game_rate", "legal_move_rate",
     "val_bpb", "training_seconds", "total_seconds", "peak_vram_mb",
     "mfu_percent", "total_tokens_M", "num_steps", "num_params_M", "depth",
 ]
@@ -132,6 +133,9 @@ def start_run(desc):
         "commit": commit,
         "description": desc,
         "status": "crash" if crashed else "pending",
+        # Night 2 primary metric (higher is better); val_bpb kept for continuity.
+        "complete_game_rate": summary.get("complete_game_rate", 0.0),
+        "legal_move_rate": summary.get("legal_move_rate", 0.0),
         "val_bpb": summary.get("val_bpb", 0.0),
         "peak_vram_mb": summary.get("peak_vram_mb", 0.0),
         "timed_out": timed_out,

@@ -70,7 +70,21 @@
     border-radius: 8px; padding: 6px 10px; cursor: pointer; font: inherit;
   }
 
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 18px 0; }
+  .nighttabs { display: flex; gap: 8px; margin: 16px 0 6px; flex-wrap: wrap; }
+  .nighttab {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 999px;
+    padding: 7px 14px; cursor: pointer; font: inherit; color: var(--ink-2); display: flex;
+    align-items: baseline; gap: 8px; transition: background 0.12s, border-color 0.12s;
+  }
+  .nighttab:hover { background: var(--page); }
+  .nighttab.active { border-color: var(--series-1); color: var(--ink); }
+  .nighttab .act { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .nighttab.active .act { color: var(--series-1); }
+  .nighttab.pending { opacity: 0.6; cursor: default; font-style: italic; }
+  .nighthead h2 { font-size: 16px; margin: 4px 0 0; font-weight: 600; }
+  .nighthead .sub { margin: 2px 0 0; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 14px 0 0; }
   .tile {
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
     padding: 10px 14px;
@@ -206,15 +220,20 @@
     <div class="head-row">
       <div>
         <h1 id="title">autoresearch: othello</h1>
-        <p class="sub" id="subtitle"></p>
+        <p class="sub" id="tagline"></p>
       </div>
       <button id="themeBtn" title="Toggle theme">◐ theme</button>
+    </div>
+    <div class="nighttabs" id="nightTabs"></div>
+    <div class="nighthead">
+      <h2 id="nightTitle"></h2>
+      <p class="sub" id="subtitle"></p>
     </div>
     <div class="tiles">
       <div class="tile"><div class="k">experiments run</div><div class="v" id="tExp">–</div></div>
       <div class="tile"><div class="k">kept</div><div class="v" id="tKept">–</div></div>
-      <div class="tile"><div class="k">best val_bpb</div><div class="v" id="tBpb">–</div></div>
-      <div class="tile"><div class="k">move legality</div><div class="v" id="tLeg">–</div></div>
+      <div class="tile"><div class="k" id="tBpbK">best</div><div class="v" id="tBpb">–</div></div>
+      <div class="tile"><div class="k">complete games</div><div class="v" id="tLeg">–</div></div>
       <div class="tile"><div class="k">win rate vs random</div><div class="v" id="tWin">–</div></div>
     </div>
     <div class="champs" id="champs"></div>
@@ -234,7 +253,7 @@
   </section>
 
   <section class="panel">
-    <h2>The night — val_bpb per experiment</h2>
+    <h2 id="nightChartTitle">The night — per experiment</h2>
     <div id="nightChart"></div>
     <div class="legend">
       <span><span class="chip" style="background:var(--series-1)"></span> kept (line = best so far)</span>
@@ -272,7 +291,7 @@
   <details class="tableview panel">
     <summary>all experiments (table view)</summary>
     <table id="runTable">
-      <thead><tr><th>#</th><th>description</th><th>status</th><th class="num">val_bpb</th><th class="num">legality</th><th class="num">win vs random</th></tr></thead>
+      <thead><tr><th>#</th><th>description</th><th>status</th><th class="num">val_bpb</th><th class="num">complete games</th><th class="num">win vs random</th></tr></thead>
       <tbody></tbody>
     </table>
   </details>
@@ -346,14 +365,42 @@ function gameFrames(g) {
 }
 
 // ============================== Data & helpers ==============================
-const DATA = window.NIGHT_DATA;
-const RUNS = DATA.runs;
-const NIGHT_T0 = RUNS[0].started_at;
-const NIGHT_T1 = RUNS[RUNS.length - 1].started_at + RUNS[RUNS.length - 1].wall_seconds + 30;
-const NIGHT_LEN = NIGHT_T1 - NIGHT_T0;
+// Multi-night research journey. The active night is swapped by loadNight();
+// everything below reads these night-scoped bindings so the same playback
+// engine renders each night, direction-aware via PRIMARY.
+const RESEARCH = window.RESEARCH_DATA;
+const NIGHTS = RESEARCH.nights;
+let NIGHT_IDX = NIGHTS.findIndex(n => n.status === "complete");
+if (NIGHT_IDX < 0) NIGHT_IDX = 0;
+let DATA, RUNS, PRIMARY, NIGHT_T0, NIGHT_T1, NIGHT_LEN;
+
 const fmtClock = t => new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 const fmtPct = x => (100 * x).toFixed(1) + "%";
 const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+// Format a primary-metric value per the night's declared format.
+function fmtPrimary(v) { return PRIMARY.fmt === "pct" ? fmtPct(v) : v.toFixed(4); }
+// Is value a better than value b on the active night's objective?
+function isBetter(a, b) { return PRIMARY.direction === "min" ? a < b : a > b; }
+// The best (champion) run on the active night's objective.
+function bestRun(runs) {
+  const keeps = runs.filter(r => r.status === "keep" && (PRIMARY.direction === "min" ? r[PRIMARY.key] > 0 : true));
+  const pool = keeps.length ? keeps : runs.filter(r => r.status !== "crash");
+  return pool.reduce((a, b) => isBetter(b[PRIMARY.key], a[PRIMARY.key]) ? b : a);
+}
+
+function setActiveNight(idx) {
+  NIGHT_IDX = idx;
+  DATA = NIGHTS[idx];
+  RUNS = DATA.runs;
+  PRIMARY = DATA.primary;
+  if (RUNS.length) {
+    NIGHT_T0 = RUNS[0].started_at;
+    NIGHT_T1 = RUNS[RUNS.length - 1].started_at + RUNS[RUNS.length - 1].wall_seconds + 30;
+    NIGHT_LEN = NIGHT_T1 - NIGHT_T0;
+  }
+}
+setActiveNight(NIGHT_IDX);
 
 // ============================== Playback state ==============================
 let T = NIGHT_T0;            // sim clock (unix seconds)
@@ -385,10 +432,11 @@ function deriveState(t) {
   const milestone = run.milestones.length
     ? run.milestones[Math.min(run.milestones.length - 1, Math.floor(progress * 10))]
     : null;
-  // completed-so-far aggregates for the tiles
+  // completed-so-far aggregates for the tiles (direction-aware on the primary)
   const doneRuns = RUNS.filter(r => r.started_at + r.wall_seconds <= t);
   const keptDone = doneRuns.filter(r => r.status === "keep");
-  const bestSoFar = keptDone.length ? Math.min(...keptDone.map(r => r.val_bpb)) : null;
+  const vals = keptDone.map(r => r[PRIMARY.key]);
+  const bestSoFar = vals.length ? (PRIMARY.direction === "min" ? Math.min(...vals) : Math.max(...vals)) : null;
   const lastKept = keptDone.length ? keptDone[keptDone.length - 1] : null;
   return { run, idx, next, phase, progress, milestone, doneRuns, bestSoFar, lastKept };
 }
@@ -420,16 +468,19 @@ function buildNightChart() {
   const m = { l: 52, r: 14, t: 10, b: 22 };
   const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", height: H }, nightBox);
   const done = RUNS.filter(r => r.status !== "crash");
-  const ys = done.map(r => r.val_bpb);
-  const yMin = Math.min(...ys) - 0.015, yMax = Math.max(...ys) + 0.015;
+  const key = PRIMARY.key;
+  const ys = done.map(r => r[key]);
+  const pad = (Math.max(...ys) - Math.min(...ys)) * 0.08 + 1e-6;
+  const yMin = Math.min(...ys) - pad, yMax = Math.max(...ys) + pad;
   const x = t => m.l + (t - NIGHT_T0) / NIGHT_LEN * (W - m.l - m.r);
   const y = v => m.t + (yMax - v) / (yMax - yMin) * (H - m.t - m.b);
   nightGeom = { x, y, W, H, m };
+  const fmtY = v => PRIMARY.fmt === "pct" ? Math.round(v * 100) + "%" : v.toFixed(3);
   // grid + y ticks
   for (let i = 0; i <= 3; i++) {
     const v = yMin + (yMax - yMin) * i / 3, yy = y(v);
     el("line", { x1: m.l, x2: W - m.r, y1: yy, y2: yy, class: "grid" }, svg);
-    el("text", { x: m.l - 6, y: yy + 3, "text-anchor": "end" }, svg).textContent = v.toFixed(3);
+    el("text", { x: m.l - 6, y: yy + 3, "text-anchor": "end" }, svg).textContent = fmtY(v);
   }
   // x ticks: every hour
   for (let t = Math.ceil(NIGHT_T0 / 3600) * 3600; t < NIGHT_T1; t += 3600) {
@@ -437,14 +488,14 @@ function buildNightChart() {
       new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
   el("line", { x1: m.l, x2: W - m.r, y1: H - m.b, y2: H - m.b, class: "axis" }, svg);
-  // best-so-far step line (kept runs only)
+  // best-so-far step line (kept runs only), direction-aware
   let best = null; let d = "";
   for (const r of RUNS) {
     if (r.status !== "keep") continue;
     const xx = x(r.started_at + r.wall_seconds);
-    if (best === null) d += `M ${xx} ${y(r.val_bpb)}`;
-    else d += ` L ${xx} ${y(best)} L ${xx} ${y(r.val_bpb)}`;
-    best = r.val_bpb;
+    if (best === null) d += `M ${xx} ${y(r[key])}`;
+    else d += ` L ${xx} ${y(best)} L ${xx} ${y(r[key])}`;
+    best = r[key];
   }
   el("path", { d, fill: "none", style: "stroke:var(--series-1)", "stroke-width": 2 }, svg);
   // run marks
@@ -457,9 +508,9 @@ function buildNightChart() {
         style: "fill:var(--status-crit);font-weight:700;font-size:13px" }, svg);
       mark.textContent = "✕";
     } else if (r.status === "keep") {
-      mark = el("circle", { cx: xx, cy: y(r.val_bpb), r: 5, style: "fill:var(--series-1)" }, svg);
+      mark = el("circle", { cx: xx, cy: y(r[key]), r: 5, style: "fill:var(--series-1)" }, svg);
     } else {
-      mark = el("circle", { cx: xx, cy: y(r.val_bpb), r: 4.5,
+      mark = el("circle", { cx: xx, cy: y(r[key]), r: 4.5,
         style: "fill:none;stroke:var(--muted)", "stroke-width": 2 }, svg);
     }
     const hit = el("rect", { x: xx - 10, y: m.t, width: 20, height: H - m.t - m.b,
@@ -467,7 +518,7 @@ function buildNightChart() {
     hit.addEventListener("mousemove", ev => showTip(
       `<b>#${r.seq}</b> ${r.description}<br>` +
       (r.status === "crash" ? `<span style="color:var(--status-crit)">crashed</span>`
-        : `val_bpb <b>${r.val_bpb.toFixed(4)}</b> · ${r.status}`) +
+        : `${PRIMARY.label} <b>${fmtPrimary(r[key])}</b> · ${r.status}`) +
       `<br><span class="t">${fmtClock(r.started_at)}</span>`, ev.clientX, ev.clientY));
     hit.addEventListener("mouseleave", hideTip);
     hit.addEventListener("click", () => { setT(r.started_at + 1); render(true); });
@@ -628,8 +679,8 @@ function render(force) {
   // tiles
   $("tExp").textContent = st.doneRuns.length;
   $("tKept").textContent = st.doneRuns.filter(r => r.status === "keep").length;
-  $("tBpb").textContent = st.bestSoFar ? st.bestSoFar.toFixed(4) : "–";
-  $("tLeg").textContent = st.lastKept && st.lastKept.final ? fmtPct(st.lastKept.final.legality_rate) : "–";
+  $("tBpb").textContent = st.bestSoFar != null ? fmtPrimary(st.bestSoFar) : "–";
+  $("tLeg").textContent = st.lastKept ? fmtPct(st.lastKept.complete_game_rate) : "–";
   $("tWin").textContent = st.lastKept && st.lastKept.final ? fmtPct(st.lastKept.final.winrate) : "–";
   // run panel
   $("rSeq").textContent = "#" + run.seq;
@@ -640,7 +691,7 @@ function render(force) {
   badge.textContent = shownStatus === "running" ? "running" : run.status;
   badge.className = "badge " + (shownStatus === "running" ? "pending" : run.status);
   $("rMeta").innerHTML = `commit <code>${run.commit}</code> · ` +
-    (run.val_bpb ? `val_bpb ${finished ? "<b>" + run.val_bpb.toFixed(4) + "</b>" : "pending"} · ` : "") +
+    `${PRIMARY.label} ${finished && run.status !== "crash" ? "<b>" + fmtPrimary(run[PRIMARY.key]) + "</b>" : "pending"} · ` +
     `${(run.num_params / 1e6).toFixed(0)}M params · started ${fmtClock(run.started_at)}`;
   const banner = $("banner");
   if (phase === "between" && next) {
@@ -693,59 +744,92 @@ function rebuildSmallCharts() {
     yMin: 0, yMax: 1,
   });
 }
-// Two headline runs: the val_bpb champion (the agent's optimization target) and
-// the "best Othello player" — the run whose free-running samples were the most
-// legal/complete. They are usually different runs; that gap is the story.
+// Two headline runs per night: the champion on this night's objective, and the
+// champion on the *other* axis. On night 1 that's "best val_bpb" vs "best
+// Othello player"; on night 2 it flips. The gap between them is the story.
+const METRIC_CARD = {
+  val_bpb: {
+    dir: "min", icon: "🏆", title: "best val_bpb — best compressor",
+    value: r => r.val_bpb.toFixed(4),
+    pick: (a, b) => b.val_bpb > 0 && (a.val_bpb <= 0 || b.val_bpb < a.val_bpb) ? b : a,
+  },
+  complete_game_rate: {
+    dir: "max", icon: "♟", title: "best Othello player — most legal play",
+    value: r => `${fmtPct(r.complete_game_rate)} complete · ${fmtPct(r.legal_move_rate)} legal`,
+    pick: (a, b) => b.complete_game_rate > a.complete_game_rate ? b : a,
+  },
+};
 function buildChampions() {
   const box = $("champs");
-  const keeps = RUNS.filter(r => r.status === "keep" && r.val_bpb > 0);
-  if (!keeps.length) return;
-  const vch = keeps.reduce((a, b) => b.val_bpb < a.val_bpb ? b : a);
-  const withFinal = RUNS.filter(r => r.final);
-  const lch = withFinal.reduce((a, b) => {
-    const bc = b.final.complete_rate, ac = a.final.complete_rate;
-    if (bc !== ac) return bc > ac ? b : a;
-    return b.final.legality_rate > a.final.legality_rate ? b : a;
-  });
+  const eligible = RUNS.filter(r => r.status !== "crash");
+  if (!eligible.length) { box.innerHTML = ""; return; }
+  const primaryKey = PRIMARY.key;
+  const otherKey = primaryKey === "val_bpb" ? "complete_game_rate" : "val_bpb";
   function jumpTo(run) { setT(run.started_at + run.startup_seconds + 300 - 1); render(true); box.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  function card(key, isPrimary) {
+    const cfg = METRIC_CARD[key];
+    const champ = eligible.reduce(cfg.pick);
+    const b = document.createElement("button");
+    b.className = "champ" + (key === "complete_game_rate" ? " leg" : "");
+    b.innerHTML = `<div class="ct">${cfg.icon} ${cfg.title}${isPrimary ? " — this night's target" : ""}</div>` +
+      `<div class="cv">${cfg.value(champ)}</div>` +
+      `<div class="cd">#${champ.seq} · ${champ.description}</div>` +
+      `<div class="cj">▶ jump to this run</div>`;
+    b.onclick = () => jumpTo(champ);
+    return b;
+  }
   box.innerHTML = "";
-  const c1 = document.createElement("button");
-  c1.className = "champ";
-  c1.innerHTML = `<div class="ct">🏆 best val_bpb — the agent's target</div>` +
-    `<div class="cv">${vch.val_bpb.toFixed(4)}</div>` +
-    `<div class="cd">#${vch.seq} · ${vch.description}</div>` +
-    `<div class="cj">▶ jump to this run</div>`;
-  c1.onclick = () => jumpTo(vch);
-  const c2 = document.createElement("button");
-  c2.className = "champ leg";
-  c2.innerHTML = `<div class="ct">♟ best Othello player — most legal play</div>` +
-    `<div class="cv">${fmtPct(lch.final.legality_rate)} legal · ${fmtPct(lch.final.complete_rate)} complete games</div>` +
-    `<div class="cd">#${lch.seq} · ${lch.description}</div>` +
-    `<div class="cj">▶ jump to this run</div>`;
-  c2.onclick = () => jumpTo(lch);
-  box.appendChild(c1);
-  box.appendChild(c2);
+  box.appendChild(card(primaryKey, true));
+  box.appendChild(card(otherKey, false));
 }
-function init() {
-  $("title").textContent = DATA.meta.title;
-  $("subtitle").textContent = DATA.meta.subtitle + " — " + DATA.meta.hardware;
-  $("foot").textContent = (DATA.meta.is_demo ? "SYNTHETIC DEMO DATA · " : "") +
-    `branch ${DATA.meta.branch} · ${RUNS.length} experiments · night of ${new Date(NIGHT_T0 * 1000).toLocaleDateString()}`;
+function buildNightTabs() {
+  const box = $("nightTabs");
+  box.innerHTML = "";
+  NIGHTS.forEach((n, i) => {
+    const b = document.createElement("button");
+    const pending = n.status !== "complete";
+    b.className = "nighttab" + (i === NIGHT_IDX ? " active" : "") + (pending ? " pending" : "");
+    const name = n.title.split(" — ")[0];
+    b.innerHTML = `<span class="act">${n.act}</span> <span>${name}${pending ? " · coming next" : ""}</span>`;
+    if (!pending) b.onclick = () => loadNight(i);
+    box.appendChild(b);
+  });
+}
+
+function loadNight(idx) {
+  setActiveNight(idx);
+  playing = false;
+  $("playBtn").textContent = "▶";
+  T = NIGHT_T0;
+  // night header + primary-metric tile label
+  $("nightTitle").textContent = DATA.act + " · " + DATA.title;
+  $("subtitle").textContent = DATA.subtitle + " — " + DATA.hardware;
+  $("nightChartTitle").textContent = `The night — ${PRIMARY.label} per experiment (${PRIMARY.direction === "min" ? "lower" : "higher"} is better)`;
+  $("tBpbK").textContent = "best " + PRIMARY.label;
+  $("foot").textContent = `${DATA.branch ? "branch " + DATA.branch + " · " : ""}${RUNS.length} experiments · night of ${new Date(NIGHT_T0 * 1000).toLocaleDateString()}`;
+  buildNightTabs();
   buildNightChart();
   rebuildSmallCharts();
-  buildBoards(3);
   buildChampions();
-  // table view
+  // table view (rebuilt per night)
   const tbody = document.querySelector("#runTable tbody");
+  tbody.innerHTML = "";
   for (const r of RUNS) {
     const tr = document.createElement("tr");
     tr.innerHTML = `<td>${r.seq}</td><td>${r.description}</td><td>${r.status}</td>` +
       `<td class="num">${r.val_bpb ? r.val_bpb.toFixed(4) : "—"}</td>` +
-      `<td class="num">${r.final ? fmtPct(r.final.legality_rate) : "—"}</td>` +
+      `<td class="num">${fmtPct(r.complete_game_rate)}</td>` +
       `<td class="num">${r.final ? fmtPct(r.final.winrate) : "—"}</td>`;
     tbody.appendChild(tr);
   }
-  // controls
+  render(true);
+}
+
+function init() {
+  $("title").textContent = RESEARCH.meta.title;
+  $("tagline").textContent = RESEARCH.meta.tagline;
+  buildBoards(3);
+  // controls (wired once)
   $("playBtn").addEventListener("click", () => {
     playing = !playing;
     if (playing && T >= NIGHT_T1 - 1) setT(NIGHT_T0);
@@ -760,7 +844,7 @@ function init() {
     root.dataset.theme = cur === "dark" ? "light" : "dark";
   });
   addEventListener("resize", () => { buildNightChart(); rebuildSmallCharts(); render(true); });
-  render(true);
+  loadNight(NIGHT_IDX);
   requestAnimationFrame(loop);
 }
 init();

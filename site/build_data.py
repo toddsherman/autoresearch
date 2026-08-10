@@ -82,6 +82,13 @@ def load_run(runs_dir, record):
     if status == "pending" and result is not None:
         status = "discard"
 
+    # Unified metrics so every run carries both objectives regardless of which
+    # night recorded which as primary. Night 1 didn't record complete_game_rate
+    # in the index, but each run's result.json has it as final_sample_stats.
+    fss = (result or {}).get("final_sample_stats", {})
+    complete_game_rate = record.get("complete_game_rate") or fss.get("complete_rate", 0.0)
+    legal_move_rate = record.get("legal_move_rate") or fss.get("legality_rate", 0.0)
+
     return {
         "run_id": record["run_id"],
         "seq": record["seq"],
@@ -89,6 +96,8 @@ def load_run(runs_dir, record):
         "description": record.get("description", ""),
         "status": status,
         "val_bpb": record.get("val_bpb", 0.0),
+        "complete_game_rate": complete_game_rate,
+        "legal_move_rate": legal_move_rate,
         "peak_vram_mb": record.get("peak_vram_mb", 0.0),
         "started_at": record["started_at"],
         "wall_seconds": record.get("wall_seconds", 330.0),
@@ -101,46 +110,76 @@ def load_run(runs_dir, record):
     }
 
 
+# Each night declares which metric it optimized so the site renders the timeline
+# and champions in the right direction. Add an entry here when a night finishes.
+#   primary.direction: "min" (val_bpb, lower better) or "max" (rate, higher better)
+NIGHTS = [
+    {
+        "id": "night1",
+        "act": "Act I",
+        "telemetry_dir": "telemetry",
+        "title": "Night 1 — learning to compress",
+        "subtitle": "the agent minimizes val_bpb; legal play emerges as a side effect, then diverges",
+        "hardware": "1x H100",
+        "primary": {"key": "val_bpb", "label": "val_bpb", "direction": "min", "unit": "bits/byte", "fmt": "bpb"},
+    },
+    {
+        "id": "night2",
+        "act": "Act II",
+        "telemetry_dir": "telemetry-night2",
+        "title": "Night 2 — learning to play",
+        "subtitle": "the agent maximizes complete legal games; a different objective, a different model",
+        "hardware": "1x H100",
+        "primary": {"key": "complete_game_rate", "label": "complete games", "direction": "max", "unit": "%", "fmt": "pct"},
+    },
+]
+
+
+def build_night(cfg):
+    """Load one night's telemetry into a site bundle, or a 'pending' placeholder
+    if its telemetry doesn't exist yet."""
+    tel = cfg["telemetry_dir"]
+    index_path = os.path.join(tel, "night.jsonl")
+    night = {k: cfg[k] for k in ("id", "act", "title", "subtitle", "hardware", "primary")}
+    if not os.path.exists(index_path):
+        night.update({"status": "pending", "runs": [], "branch": None})
+        return night
+    records = [json.loads(l) for l in open(index_path) if l.strip()]
+    runs_dir = os.path.join(tel, "runs")
+    runs = [load_run(runs_dir, r) for r in sorted(records, key=lambda r: r["seq"])]
+    branch = None
+    for r in runs:
+        p = os.path.join(runs_dir, r["run_id"], "meta.json")
+        if os.path.exists(p) and json.load(open(p)).get("branch"):
+            branch = json.load(open(p))["branch"]
+            break
+    night.update({"status": "complete", "runs": runs, "branch": branch})
+    return night
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--telemetry-dir", default="telemetry")
     parser.add_argument("--out", default=os.path.join("site", "data.js"))
-    parser.add_argument("--title", default="autoresearch: othello")
-    parser.add_argument("--hardware", default="1x H100")
     args = parser.parse_args()
 
-    index_path = os.path.join(args.telemetry_dir, "night.jsonl")
-    if not os.path.exists(index_path):
-        sys.exit(f"No {index_path} found — has a night been run?")
-    records = [json.loads(l) for l in open(index_path) if l.strip()]
-    runs_dir = os.path.join(args.telemetry_dir, "runs")
-    runs = [load_run(runs_dir, r) for r in sorted(records, key=lambda r: r["seq"])]
+    nights = [build_night(cfg) for cfg in NIGHTS]
+    if not any(n["status"] == "complete" for n in nights):
+        sys.exit("No night telemetry found — has any night been run?")
 
-    branch = ""
-    for r in runs:
-        # branch lives in per-run meta; grab the first one available
-        p = os.path.join(runs_dir, r["run_id"], "meta.json")
-        if os.path.exists(p):
-            branch = json.load(open(p)).get("branch", "")
-            if branch:
-                break
-
-    bundle = {
+    research = {
         "meta": {
-            "title": args.title,
-            "subtitle": "an agent teaching a GPT the game of Othello, 5 minutes at a time",
-            "hardware": args.hardware,
-            "branch": branch or "unknown",
+            "title": "autoresearch: othello",
+            "tagline": "an AI agent teaches a small GPT to play Othello, five minutes at a time — a multi-night research journey",
             "generated_at": time.time(),
-            "is_demo": False,
         },
-        "runs": runs,
+        "nights": nights,
     }
     with open(args.out, "w") as f:
-        f.write("window.NIGHT_DATA = ")
-        json.dump(bundle, f, separators=(",", ":"))
+        f.write("window.RESEARCH_DATA = ")
+        json.dump(research, f, separators=(",", ":"))
         f.write(";\n")
-    print(f"Wrote {args.out} ({os.path.getsize(args.out) // 1024} KB): {len(runs)} runs")
+    summary = ", ".join(f"{n['id']}:{len(n['runs'])}runs/{n['status']}" for n in nights)
+    print(f"Wrote {args.out} ({os.path.getsize(args.out) // 1024} KB): {summary}")
 
 
 if __name__ == "__main__":

@@ -621,6 +621,9 @@ total_tokens = step * TOTAL_BATCH_SIZE
 model.eval()
 with autocast_ctx:
     val_bpb = evaluate_bpb(model, tokenizer, DEVICE_BATCH_SIZE)
+    # Night 2 PRIMARY metric (higher is better). val_bpb is still reported for
+    # continuity with night 1, but complete_game_rate is the optimization target.
+    complete_game_rate, legal_move_rate = evaluate_complete_game_rate(model, tokenizer)
 
 # Final summary
 t_end = time.time()
@@ -629,6 +632,8 @@ steady_state_mfu = 100 * num_flops_per_token * TOTAL_BATCH_SIZE * (step - 10) / 
 peak_vram_mb = torch.cuda.max_memory_allocated() / 1024 / 1024
 
 print("---")
+print(f"complete_game_rate: {complete_game_rate:.6f}")
+print(f"legal_move_rate:  {legal_move_rate:.6f}")
 print(f"val_bpb:          {val_bpb:.6f}")
 print(f"training_seconds: {total_training_time:.1f}")
 print(f"total_seconds:    {t_end - t_start:.1f}")
@@ -641,6 +646,8 @@ print(f"depth:            {DEPTH}")
 
 # Telemetry (REQUIRED): final Othello eval, checkpoint save, result.json
 telemetry.finalize(model, tokenizer, val_bpb, metrics={
+    "complete_game_rate": complete_game_rate,
+    "legal_move_rate": legal_move_rate,
     "training_seconds": total_training_time,
     "total_seconds": t_end - t_start,
     "peak_vram_mb": peak_vram_mb,

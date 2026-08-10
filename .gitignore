@@ -25,3 +25,4 @@ results.tsv
 # Telemetry (machine-generated per run, consumed by the playback site)
 telemetry/
 run.log
+telemetry-night2/

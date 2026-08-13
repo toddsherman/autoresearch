@@ -79,6 +79,40 @@ def sample_games(model_fn, tokenizer, n_games=16, max_new_tokens=70,
     return games, stats
 
 
+def model_player(model_fn, tokenizer, device="cuda"):
+    """Adapt a model into an arena move-function fn(game, rng) -> square.
+
+    Reconstructs the token context from game.moves each turn (so it sees the
+    opponent's moves too), then plays the highest-logit *legal* move
+    (legality-masked greedy). Slots into othello.arena alongside engine players.
+    """
+    first_ids, cont_ids = build_move_tables(tokenizer)
+    bos = tokenizer.get_bos_token_id()
+
+    @torch.no_grad()
+    def fn(game, rng):
+        ids = [bos]
+        for i, m in enumerate(game.moves):
+            ids.append(first_ids[m] if i == 0 else cont_ids[m])
+        legal = bb_to_moves(game.legal_moves())
+        x = torch.tensor([ids], dtype=torch.long, device=device)
+        logits = model_fn(x)[0, -1].float()
+        table = first_ids if not game.moves else cont_ids
+        return max(legal, key=lambda m: logits[table[m]].item())
+
+    return fn
+
+
+def run_gauntlet(model_fn, tokenizer, n_games=40, max_depth=5, seed=0, device="cuda"):
+    """Play the model against the standard weak->strong opponent ladder and
+    return per-opponent scores, implied Elo gaps, and the strongest rung it
+    still beats. This is the real playing-strength metric."""
+    from othello.arena import gauntlet
+    from othello.search import standard_ladder
+    player = model_player(model_fn, tokenizer, device=device)
+    return gauntlet(player, standard_ladder(max_depth), n_games=n_games, seed=seed)
+
+
 @torch.no_grad()
 def play_vs_random(model_fn, tokenizer, n_games=20, seed=0, device="cuda"):
     """Play the model against a uniform-random opponent, alternating colors.

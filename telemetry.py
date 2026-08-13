@@ -23,7 +23,7 @@ import time
 
 import torch
 
-from othello.modeleval import sample_games, play_vs_random
+from othello.modeleval import sample_games, play_vs_random, evaluate_strength
 
 # Sampling configuration (fixed)
 MILESTONE_EVERY = 0.1     # sample games each time progress crosses a 10% boundary
@@ -154,6 +154,14 @@ def finalize(model, tokenizer, val_bpb, metrics=None):
         model_fn, tokenizer, n_games=VS_RANDOM_GAMES, seed=7, device=device)
 
     eager = getattr(model, "_orig_mod", model)
+
+    # Night 3: sacred playing-strength metric. Computed HERE (read-only
+    # instrumentation) so no experiment can skip or alter it. Uses the eager
+    # model to avoid recompilation across the varied sequence lengths of full
+    # games. This is the run's optimization target (see program.md).
+    strength, strength_by_opponent = evaluate_strength(eager, tokenizer, device=device)
+    print(f"strength:         {strength:.4f}  {strength_by_opponent}")
+
     config = None
     if hasattr(eager, "config"):
         from dataclasses import asdict, is_dataclass
@@ -163,6 +171,8 @@ def finalize(model, tokenizer, val_bpb, metrics=None):
 
     result = {
         "val_bpb": val_bpb,
+        "strength": strength,
+        "strength_by_opponent": strength_by_opponent,
         "finished_at": time.time(),
         "final_sample_stats": sample_stats,
         "final_sample_games": games,

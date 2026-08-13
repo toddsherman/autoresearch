@@ -8,7 +8,9 @@ git history. (At launch this file becomes `program.md`.)
 
 ## Setup
 
-1. **Agree on a run tag** and create branch `autoresearch/<tag>` from master.
+1. **Agree on a run tag** and create branch `autoresearch/<tag>` from the current
+   branch (the night-3 baseline you are checked out on — NOT `master`, which is the
+   upstream base without any Othello code).
 2. **Read the in-scope files**: `README.md`, `prepare.py` (fixed constants, data,
    tokenizer, eval — do not modify), `train.py` (the file you modify).
 3. **Verify data exists**: `~/.cache/autoresearch/` must contain the data shards

@@ -135,8 +135,12 @@ def evaluate_strength(model, tokenizer, device="cuda"):
     from othello.arena import match
     from othello.search import random_player, greedy_player, search_player
 
+    # torch.autocast needs a device-type string ("cuda"/"cpu"); telemetry.finalize
+    # passes a torch.device here, so normalize.
+    device_type = device.type if isinstance(device, torch.device) else str(device).split(":")[0]
+
     def model_fn(x):
-        with torch.autocast(device, dtype=torch.bfloat16):
+        with torch.autocast(device_type, dtype=torch.bfloat16):
             return model(x)
 
     player = model_player(model_fn, tokenizer, device=device)

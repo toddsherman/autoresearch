@@ -106,11 +106,49 @@ def model_player(model_fn, tokenizer, device="cuda"):
 def run_gauntlet(model_fn, tokenizer, n_games=40, max_depth=5, seed=0, device="cuda"):
     """Play the model against the standard weak->strong opponent ladder and
     return per-opponent scores, implied Elo gaps, and the strongest rung it
-    still beats. This is the real playing-strength metric."""
+    still beats. This is the full playing-strength report (final evaluation)."""
     from othello.arena import gauntlet
     from othello.search import standard_ladder
     player = model_player(model_fn, tokenizer, device=device)
     return gauntlet(player, standard_ladder(max_depth), n_games=n_games, seed=seed)
+
+
+# --- Night 3: sacred playing-strength metric (fixed, un-gameable) --------------
+# The ladder, game count and seed are FIXED here so the score is directly
+# comparable across every experiment. This lives in the read-only othello/
+# package and takes no protocol arguments, so an experiment cannot change how it
+# is measured (see program.md). This is the optimization target for night 3.
+STRENGTH_LADDER = ("random", "greedy", "search@1", "search@2")
+STRENGTH_N_GAMES = 16
+STRENGTH_SEED = 20260813
+
+
+def evaluate_strength(model, tokenizer, device="cuda"):
+    """Mean score of the model against the fixed weak->moderate ladder
+    (random, greedy, search@1, search@2), STRENGTH_N_GAMES per opponent at a
+    fixed seed, colors alternating. Returns (mean_score, per_opponent_scores).
+
+    score per opponent = (wins + 0.5*draws) / games, so 0.5 is an even match.
+    Higher mean = stronger, more transferable play. Un-gameable: the opponents,
+    seed and game count are fixed constants, not arguments.
+    """
+    from othello.arena import match
+    from othello.search import random_player, greedy_player, search_player
+
+    def model_fn(x):
+        with torch.autocast(device, dtype=torch.bfloat16):
+            return model(x)
+
+    player = model_player(model_fn, tokenizer, device=device)
+    opponents = {
+        "random": random_player(),
+        "greedy": greedy_player(),
+        "search@1": search_player(1),
+        "search@2": search_player(2),
+    }
+    scores = {name: match(player, opp, n_games=STRENGTH_N_GAMES, seed=STRENGTH_SEED)["score"]
+              for name, opp in opponents.items()}
+    return sum(scores.values()) / len(scores), scores
 
 
 @torch.no_grad()

@@ -27,12 +27,32 @@ from othello.search import best_move
 
 # Defaults chosen for a strong-but-affordable corpus (see search.py timings):
 # depth 4 is ~0.5s/game single-core and crushes the greedy policy.
-DEFAULTS = dict(depth=4, exact_empties=8, opening_random=4, epsilon=0.08)
+#
+# depth_mix (optional) is a list of (depth, weight) pairs; each game picks a
+# depth from it. Mixing depths + heavier opening randomization gives a DIVERSE
+# corpus (varied positions and targets) while every move stays strong, which is
+# what the night-3 strength objective needs. Both moves come from the searcher,
+# so there are no weak targets (unlike search-vs-weak games).
+DEFAULTS = dict(depth=4, exact_empties=8, opening_random=4, epsilon=0.08, depth_mix=None)
 
 
-def play_one_game(seed, depth, exact_empties, opening_random, epsilon):
+def _pick_depth(rng, depth, depth_mix):
+    if not depth_mix:
+        return depth
+    total = sum(w for _, w in depth_mix)
+    r = rng.random() * total
+    acc = 0.0
+    for d, w in depth_mix:
+        acc += w
+        if r < acc:
+            return d
+    return depth_mix[-1][0]
+
+
+def play_one_game(seed, depth, exact_empties, opening_random, epsilon, depth_mix=None):
     """Play one full game with the search policy. Returns the transcript string."""
     rng = random.Random(seed)
+    d = _pick_depth(rng, depth, depth_mix)
     game = Game()
     ply = 0
     while not game.over:
@@ -42,7 +62,7 @@ def play_one_game(seed, depth, exact_empties, opening_random, epsilon):
         else:
             p = game.boards[game.player]
             o = game.boards[1 - game.player]
-            sq = best_move(p, o, depth, exact_empties, rng, epsilon)
+            sq = best_move(p, o, d, exact_empties, rng, epsilon)
         game.play(sq)
         ply += 1
     return moves_to_text(game.moves)
@@ -90,9 +110,16 @@ if __name__ == "__main__":
     ap.add_argument("--exact-empties", type=int, default=DEFAULTS["exact_empties"])
     ap.add_argument("--opening-random", type=int, default=DEFAULTS["opening_random"])
     ap.add_argument("--epsilon", type=float, default=DEFAULTS["epsilon"])
+    ap.add_argument("--depth-mix", type=str, default=None,
+                    help='weighted depth mix, e.g. "3:2,2:1,4:1" (overrides --depth per game)')
     args = ap.parse_args()
+    depth_mix = None
+    if args.depth_mix:
+        depth_mix = [(int(d), float(w)) for d, w in
+                     (pair.split(":") for pair in args.depth_mix.split(","))]
     cfg = dict(depth=args.depth, exact_empties=args.exact_empties,
-               opening_random=args.opening_random, epsilon=args.epsilon)
+               opening_random=args.opening_random, epsilon=args.epsilon,
+               depth_mix=depth_mix)
     t0 = time.time()
     generate_shards(args.out_dir, args.num_shards, args.games_per_shard,
                     args.seed, args.workers, cfg)

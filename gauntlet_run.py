@@ -55,7 +55,7 @@ def main():
     args = ap.parse_args()
 
     model, config = load_model(args.run_dir)
-    tokenizer = Tokenizer()
+    tokenizer = Tokenizer.from_directory()
 
     def model_fn(x):
         with torch.autocast("cuda", dtype=torch.bfloat16):

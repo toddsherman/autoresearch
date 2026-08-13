@@ -160,7 +160,8 @@ def finalize(model, tokenizer, val_bpb, metrics=None):
     # model to avoid recompilation across the varied sequence lengths of full
     # games. This is the run's optimization target (see program.md).
     strength, strength_by_opponent = evaluate_strength(eager, tokenizer, device=device)
-    print(f"strength:         {strength:.4f}  {strength_by_opponent}")
+    print(f"strength:         {strength:.6f}")          # parsed by run_experiment
+    print(f"strength_detail:  {strength_by_opponent}")  # human-readable breakdown
 
     config = None
     if hasattr(eager, "config"):

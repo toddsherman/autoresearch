@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Training a model to play Othello with Autoresearch</title>
-<meta name="description" content="Using Autoresearch, where an AI agent runs its own ML experiments, to train a small model to play Othello from lists of moves. It learned to play, and built a picture of the board inside it.">
+<meta name="description" content="Using Autoresearch, where an AI agent runs its own ML experiments, to train a small model to play Othello from lists of moves. It learned to play, then to win, and built a picture of the board inside it.">
 <style>
   :root {
     color-scheme: light;
@@ -202,7 +202,7 @@
     <div class="hero-copy">
       <p class="kicker reveal">Autoresearch · Othello</p>
       <h1 class="reveal">Training a model to play Othello with Autoresearch</h1>
-      <p class="lede reveal">Autoresearch lets an AI agent run its own machine-learning experiments: editing the code, training, checking results, and trying again, hundreds of times. I pointed it at a small model and asked it to learn Othello from nothing but lists of moves. It learned to play legal games. And when I looked inside, the model had built a picture of the board.</p>
+      <p class="lede reveal">Autoresearch lets an AI agent run its own machine-learning experiments: editing the code, training, checking results, and trying again, hundreds of times. I pointed it at a small model and asked it to learn Othello from nothing but lists of moves. It learned to play legal games, then to actually win them. And when I looked inside, the model had built a picture of the board.</p>
       <div class="scrollcue reveal"><span class="arw">↓</span> scroll to see how it went</div>
     </div>
     <figure class="hero-art reveal">
@@ -333,6 +333,42 @@
   </div>
 </section>
 
+<!-- RUN 3 -->
+<section class="block">
+  <div class="wide">
+    <div class="wrap">
+      <span class="steplabel reveal">The third run &nbsp;<span class="dur">· 35 experiments · about 4 hours</span></span>
+      <h2 class="reveal">Then I asked it to win</h2>
+      <p class="reveal">Playing by the rules is a low bar. A model can make only legal moves and still play badly, handing the game away move after move. So for the third run I raised the stakes to the thing I'd wanted all along: <strong>win the game</strong>, not just finish it legally.</p>
+      <div class="howbox reveal">
+        <div class="h">Under the hood: keeping score of skill</div>
+        <p>To measure skill you need opponents. So I built a fixed ladder of four, from easy to hard: a player that moves at <em>random</em>, a <em>greedy</em> one that grabs the most pieces every turn, and two that <em>think ahead</em>, searching one and two moves into the future. The model plays a set batch of games against each, and its score is simple:</p>
+        <div class="formula">
+          <span class="eq">strength = <span class="frac"><span class="num">wins + &frac12; &middot; draws</span><span class="den">games played</span></span></span>
+          <span class="gloss">averaged across the four fixed opponents. 0.5 against an opponent is an even match; above 0.5 it wins more than it loses.</span>
+        </div>
+        <p>The opponents, the number of games, and the starting positions are all locked down, so the agent can't cheat the number with a lucky streak. And "play" means just what it sounds like: the model looks at the game so far and, of the moves that are actually legal, makes the one it rates highest. No search, no rulebook, no looking ahead, only the instincts it built from watching finished games.</p>
+      </div>
+      <p class="reveal sub">Same loop as before: a fresh idea, five minutes of training, keep it only if the score clearly rose. Each dot is one experiment; the line tracks its best score so far.</p>
+    </div>
+    <figure class="reveal chart" data-viz="run3chart">
+      <div class="wrap"><div class="chart-title">Its score against the opponent ladder (0.5 is an even match; higher is better)</div></div>
+      <div id="run3chart"></div>
+    </figure>
+    <div class="wrap">
+      <p class="reveal" style="margin-top:2.4rem">It climbed from barely above a coin-flip to genuinely skilled play. Graded afterward on a larger, fully deterministic set of games, the final model wins convincingly against the easier opponents:</p>
+      <div class="stats reveal">
+        <div class="stat"><div class="v">88%</div><div class="k">of games won against random play</div></div>
+        <div class="stat"><div class="v">76%</div><div class="k">won against a greedy piece-grabber</div></div>
+        <div class="stat"><div class="v comparison">90%</div><div class="k">won against a one-move-lookahead search</div></div>
+      </div>
+      <p class="reveal sub" style="margin-top:2rem">That is real skill, learned from nothing but lists of moves, with no rules given and no searching ahead when it plays. It meets its match against an opponent that looks two moves ahead, and a deeper search still beats it, since the model never learned to plan that far. But reaching the level of a searching player on instinct alone is a lot for so small a network.</p>
+      <p class="reveal sub">Two changes drove most of the gains, and both were about <em>restraint</em>. The agent made the model <strong>smaller</strong>, trimming it to four layers, and added <strong>dropout</strong>, which forces it not to lean too hard on any single detail. With so few training games to learn from, a bigger model just memorized them; a leaner one had to pick up the general shape of good play instead. The champion ended up at about 3.5 million parameters, a twelfth the size of the second run's model, yet a far stronger player.</p>
+      <p class="reveal sub">And the single biggest jump? An old friend. That same board-symmetry trick from the first run, the one the second run threw away, paid off again here, the largest single win of the night. The first run embraced it, the second discarded it, the third welcomed it back. The same idea, a third verdict, decided each time by nothing but the goal I had set.</p>
+    </div>
+  </div>
+</section>
+
 <!-- LOOKING INSIDE -->
 <section class="block">
   <div class="wide">
@@ -369,6 +405,9 @@
       <div class="beliefstatus" id="beliefStatus"></div>
     </figure>
     <div class="wrap">
+      <p class="reveal sub" style="margin-top:1.8rem">One more check. The model above learned to play <em>legally</em>; the one from the third run learned to <em>win</em>, and it is far smaller, just four layers. So I looked inside that one too. The board is right there again, readable from its internal activity at about <strong>90% accuracy</strong>, and it takes only those four layers to get there. A tiny network that both plays a strong game and clearly pictures the board it was never shown.</p>
+    </div>
+    <div class="wrap">
       <p class="reveal sub" style="margin-top:1.6rem">This mirrors a well-known result called "Othello-GPT," where researchers found the same thing in a larger model: evidence that models trained only to predict can build genuine internal models of the world they're predicting. <a href="https://arxiv.org/abs/2210.13382" target="_blank" rel="noopener">(The original paper</a>; a <a href="https://arxiv.org/abs/2309.00941" target="_blank" rel="noopener">follow-up</a> showed the board is held as a simple linear pattern in "mine versus yours" terms, the same framing used here.)</p>
     </div>
   </div>
@@ -378,8 +417,8 @@
 <section class="block">
   <div class="wrap">
     <span class="steplabel reveal">In short</span>
-    <p class="pull reveal">Running on its own, Autoresearch trained a small model to play legal Othello, worked around a pitfall it discovered along the way, and ended with a model that had quietly built a map of the board it was never shown.</p>
-    <p class="reveal sub" style="margin-top:1.6rem">All told: about 130 experiments across the two runs, roughly 15 hours of compute on a rented GPU, for around $50. Every run is in the logs.</p>
+    <p class="pull reveal">Running on its own, Autoresearch trained a small model to play legal Othello, then to genuinely win, working around a pitfall it found along the way and ending with models that had quietly built a map of the board they were never shown.</p>
+    <p class="reveal sub" style="margin-top:1.6rem">All told: about 165 experiments across the three runs, close to 20 hours of compute on rented GPUs, for under $100. Every run is in the logs.</p>
     <div class="links reveal">
       <div class="linkrow"><a href="https://github.com/toddsherman/autoresearch" target="_blank" rel="noopener">The code &amp; full logs</a><span class="d">everything the AI changed, run by run</span></div>
       <div class="linkrow"><a href="https://github.com/karpathy/autoresearch" target="_blank" rel="noopener">autoresearch</a><span class="d">Andrej Karpathy's original idea</span></div>
@@ -407,7 +446,7 @@ function gameFrames(moves){const toks=moves?moves.split(/\s+/):[];const frames=[
   return{frames,illegalSq,illegalTok,legal,total:toks.length,complete:over&&legal===toks.length,black,white};}
 
 // ====================== data ======================
-const R=window.RESEARCH_DATA, RUN1=R.nights[0], RUN2=R.nights[1], PROBE=R.nights[2].probe;
+const R=window.RESEARCH_DATA, RUN1=R.nights[0], RUN2=R.nights[1], RUN3=R.nights[2], PROBE=R.nights[3].probe;
 const $=id=>document.getElementById(id);
 const pct=x=>(100*x).toFixed(0)+"%";
 // pick a run's games from a milestone (0..last)
@@ -513,6 +552,7 @@ const vizInit={
     const complete=games.filter(g=>g.is_complete);const pick=(complete.concat(games)).slice(0,3);
     pick.forEach((g,i)=>{const cell=document.createElement("div");cell.className="bcell";const bd=document.createElement("div");bd.className="board";const cap=document.createElement("div");cap.className="bcap";cell.appendChild(bd);cell.appendChild(cap);el.appendChild(cell);const rec=makeBoardAnim(bd,cap,g.moves);rec.active=true;anims.push(rec);});
   },
+  run3chart(){drawChart($("run3chart"),RUN3,"strength","max");},
   heat(){drawHeat();},
   belief(){if(!beliefSqs)buildBelief();bActive=true;}
 };

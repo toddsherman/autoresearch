@@ -30,3 +30,6 @@ probe_results.json
 
 # Champion checkpoints backed up off RunPod before teardown (483MB of weights)
 checkpoints/
+
+# night-3 strength telemetry backup (weights + journey, pulled from pod)
+telemetry-night3/

@@ -96,6 +96,7 @@ def load_run(runs_dir, record):
         "description": record.get("description", ""),
         "status": status,
         "val_bpb": record.get("val_bpb", 0.0),
+        "strength": record.get("strength", 0.0),
         "complete_game_rate": complete_game_rate,
         "legal_move_rate": legal_move_rate,
         "peak_vram_mb": record.get("peak_vram_mb", 0.0),
@@ -135,6 +136,16 @@ NIGHTS = [
     {
         "id": "night3",
         "act": "Act III",
+        "telemetry_dir": "telemetry-night3/telemetry",
+        "title": "Night 3 — learning to win",
+        "subtitle": "the agent maximizes playing strength against a fixed ladder of opponents",
+        "hardware": "1x H100 NVL",
+        "primary": {"key": "strength", "label": "strength", "direction": "max", "unit": "score", "fmt": "score"},
+        "lean": True,  # chart-only: drop per-run games/loss_curve to keep data.js small
+    },
+    {
+        "id": "probe",
+        "act": "Act IV",
         "type": "probe",
         "probe_file": "probe_results.json",
         "title": "World model — looking inside",
@@ -183,8 +194,17 @@ def main():
     parser.add_argument("--out", default=os.path.join("site", "data.js"))
     args = parser.parse_args()
 
-    nights = [build_probe_night(cfg) if cfg.get("type") == "probe" else build_night(cfg)
-              for cfg in NIGHTS]
+    nights = []
+    for cfg in NIGHTS:
+        night = build_probe_night(cfg) if cfg.get("type") == "probe" else build_night(cfg)
+        # "lean" nights are charted by metric only (no board playback), so drop the
+        # heavy per-run payload (games, loss curves, diffs) to keep data.js small.
+        if cfg.get("lean") and night.get("runs"):
+            keep = ("run_id", "seq", "description", "status", "strength",
+                    "val_bpb", "complete_game_rate", "legal_move_rate",
+                    "started_at", "wall_seconds")
+            night["runs"] = [{k: r[k] for k in keep if k in r} for r in night["runs"]]
+        nights.append(night)
     if not any(n["status"] == "complete" for n in nights):
         sys.exit("No night telemetry found — has any night been run?")
 
